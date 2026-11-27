@@ -272,9 +272,42 @@ let carIndex=0;
 function car(c){let g=new T.Group(),kind=carIndex++%4, suv=kind===2, sport=kind===1, roof=suv?3.85:sport?2.85:3.45;let ext=new T.Group();g.add(ext);shell(ext,c,[[-4.7,1.65,.85,1.65],[-4.15,2.12,.65,2.02],[-2.6,2.22,.65,2.15],[2.7,2.22,.65,2.15],[4.2,2.05,.7,1.95],[4.65,1.7,.85,1.65]]);shell(ext,0x344a59,[[-2.6,1.85,2.04,2.15],[-1.25,1.72,2.05,roof],[suv?2.5:1.45,1.72,2.05,roof],[3,1.85,2.05,2.15]]);box(3.35,.14,suv?3.8:2.7,c,0,roof, suv?.55:.1,ext);let lights=[];for(let side of [-1,1]){box(.12,1.15,.19,c,side*1.78,(roof+2.1)/2,.25,ext);box(.48,.3,.65,c,side*2.35,2.35,-1.5,ext);box(.08,.23,.48,trim,side*2.59,2.35,-1.5,ext);for(let z of [-.5,1.65])box(.08,.12,.5,trim,side*2.23,1.85,z,ext);for(let z of [-2.95,2.95]){vehicleWheel(ext,side*2.13,z,.91,.72)}for(let [z,col] of [[-4.58,0xfff5dc],[4.53,0xc52230]]){let m=new T.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0});let o=new T.Mesh(new T.BoxGeometry(1.25,.26,.15),m);o.position.set(side*1.18,1.56,z);ext.add(o);lights.push({m,side,z})}for(let z of [-4.6,4.55]){let m=new T.MeshStandardMaterial({color:0xffa020,emissive:0xffa020,emissiveIntensity:0});let o=new T.Mesh(new T.BoxGeometry(.35,.24,.18),m);o.position.set(side*1.86,1.54,z);ext.add(o);lights.push({m,side,z,indicator:true})}}box(2.5,.48,.18,0x15191d,0,1.1,-4.65,ext);for(let k=0;k<4;k++)box(2.3,.045,.2,trim,0,.94+k*.1,-4.76,ext);box(1,.3,.12,0xf5f5ef,0,1.05,4.7,ext);for(let side of [-1,1]){box(.12,.11,5.4,0x262e35,side*2.18,.78,0,ext);box(.07,.06,4.2,0xbac4cc,side*2.16,2.04,0,ext);box(.68,.09,.2,0x111a21,side*1.1,1.08,-4.72,ext);box(.77,.11,.12,0x821b28,side*1.15,1.43,4.65,ext);}box(2.8,.19,.18,0x252b32,0,.86,4.65,ext);g.userData.bodyColor=c;g.userData.bodyHeight=roof;g.userData.lights=lights;g.userData.rollingWheels=ext.children.filter(o=>o.userData.rollingWheel);g.userData.hitW=2.22;g.userData.hitL=4.73;scene.add(g);return g}
 let taxi=car(0xffc728);box(2,.45,.9,0xffe69b,0,3.78,0,taxi);let interior=new T.Group();taxi.add(interior);
 box(4.15,.18,7.6,dark,0,1.12,0,interior);box(4.15,.16,4.5,dark,0,3.65,.15,interior);box(4.1,.34,1.15,dark,0,1.88,-2.02,interior);box(4,.065,.16,trim,0,2.04,-1.43,interior);box(3.8,.18,2.4,0xffc728,0,1.83,-3.4,interior);for(let side of [-1,1]){box(.22,1.12,6.3,dark,side*2.02,1.77,.1,interior);box(.32,.14,5.8,trim,side*1.94,2.29,.1,interior);box(.42,.16,1.5,0x303641,side*1.85,1.92,.1,interior);for(let z of [.55,2.55]){box(1.5,.4,1.35,0x303640,side*.96,1.48,z,interior);let back=box(1.5,1.35,.35,0x303640,side*.96,2.12,z+.62,interior);back.rotation.x=-.12;box(.85,.52,.35,0x252b33,side*.96,3.03,z+.65,interior);for(let k=-2;k<=2;k++)box(.025,.95,.025,0x555d66,side*.96+k*.22,2.12,z+.42,interior)}let pillar=box(.11,1.65,.14,dark,side*2.01,2.92,-1.65,interior);pillar.rotation.x=.35;box(.16,1.35,.2,dark,side*1.94,2.92,1.1,interior);let vent=cyl(.27,.1,trim,side*1.65,2.16,-1.42,interior);vent.rotation.x=Math.PI/2;for(let k=-2;k<=2;k++)box(.36,.025,.05,dark,side*1.65,2.16+k*.07,-1.34,interior)}box(3.8,1,.2,dark,0,2.05,3.5,interior);box(.65,.5,2,dark,0,1.65,-.2,interior);for(let i=0;i<4;i++){box(.15,.055,.16,0x53616c,-.24+i*.16,1.94,.42,interior);}box(.50,.12,.6,0x161d24,0,1.94,.76,interior);for(let side of [-1,1]){box(.10,.12,.48,0xadb5bc,side*1.88,2.32,.10,interior);box(.16,.38,.65,0x2a323d,side*1.88,2.08,.15,interior);}const dashCanvas=document.createElement('canvas');dashCanvas.width=1200;dashCanvas.height=720;const dc=dashCanvas.getContext('2d'),dashTexture=new T.CanvasTexture(dashCanvas);dashTexture.colorSpace=T.SRGBColorSpace;const dashboardMount=new T.Group();dashboardMount.position.set(.59,2.44,-1.66);dashboardMount.rotation.y=-.24;interior.add(dashboardMount);box(1.83,1.12,.095,0x10151c,0,0,0,dashboardMount);// Live cockpit display: the world pane is a GPU render of the very same scene.
-const dashCamera=new T.PerspectiveCamera(54,1.5,.5,700);
+// Navigation-map camera: deliberately elevated, orthographic and heading-up.
+const dashCamera=new T.OrthographicCamera(-100,100,100/1.5,-100/1.5,.5,700);
 const dashWorldTarget=new T.WebGLRenderTarget(864,576,{depthBuffer:true,stencilBuffer:false,minFilter:T.LinearFilter,magFilter:T.LinearFilter});
-const dashWorldPane=new T.Mesh(new T.PlaneGeometry(1.73*576/800,1.04*384/480),new T.MeshBasicMaterial({map:dashWorldTarget.texture,toneMapped:false}));
+// A separate display-only style pass preserves the actual model shapes while
+// reducing photographic detail and giving the map a clean navigation-system look.
+const dashMapMaterial=new T.ShaderMaterial({
+ toneMapped:false,
+ uniforms:{worldMap:{value:dashWorldTarget.texture},pixelStep:{value:new T.Vector2(1/864,1/576)},night:{value:0}},
+ vertexShader:`varying vec2 vMapUv;void main(){vMapUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+ fragmentShader:`
+ uniform sampler2D worldMap;
+ uniform vec2 pixelStep;
+ uniform float night;
+ varying vec2 vMapUv;
+ vec3 perceptual(vec3 c){return sqrt(max(c,vec3(0.0)));}
+ float luma(vec3 c){return dot(c,vec3(.2126,.7152,.0722));}
+ void main(){
+  vec3 center=perceptual(texture2D(worldMap,vMapUv).rgb);
+  vec3 a=perceptual(texture2D(worldMap,vMapUv+vec2(pixelStep.x,0.)).rgb);
+  vec3 b=perceptual(texture2D(worldMap,vMapUv-vec2(pixelStep.x,0.)).rgb);
+  vec3 d=perceptual(texture2D(worldMap,vMapUv+vec2(0.,pixelStep.y)).rgb);
+  vec3 e=perceptual(texture2D(worldMap,vMapUv-vec2(0.,pixelStep.y)).rgb);
+  vec3 col=center*.70+(a+b+d+e)*.075;
+  float gray=luma(col);
+  float sat=mix(.78,.70,night);
+  col=mix(vec3(gray),col,sat);
+  vec3 stepped=floor(col*15.0+.5)/15.0;
+  col=mix(col,stepped,.60);
+  col=mix(col,vec3(.85,.89,.91),.10*(1.-night));
+  float edge=max(length(a-b),length(d-e));
+  col*=1.-.16*smoothstep(.13,.40,edge);
+  gl_FragColor=vec4(clamp(col*col,0.,1.),1.);
+  #include <colorspace_fragment>
+ }`
+});
+const dashWorldPane=new T.Mesh(new T.PlaneGeometry(1.73*576/800,1.04*384/480),dashMapMaterial);
 dashWorldPane.position.set(1.73*(288/800-.5),1.04*(.5-246/480),.055);dashboardMount.add(dashWorldPane);
 let dashDisplay=new T.Mesh(new T.PlaneGeometry(1.73,1.04),new T.MeshBasicMaterial({map:dashTexture,toneMapped:false,transparent:true,depthWrite:false}));dashDisplay.position.set(0,0,.059);dashboardMount.add(dashDisplay);box(.17,.35,.25,0x272e37,0,-.61,-.18,dashboardMount);cyl(.065,.23,trim,0,1.93,-.1,interior);cyl(.12,.12,dark,0,2.06,-.1,interior);box(.65,.12,.09,dark,0,3.47,-2.02,interior);const wheelMount=new T.Group();wheelMount.position.set(-.96,2.17,-.99);wheelMount.rotation.x=-.12;interior.add(wheelMount);let wheel=new T.Group();wheelMount.add(wheel);let rimWheel=new T.Mesh(new T.TorusGeometry(.365,.052,16,48),M(0x191e25));wheel.add(rimWheel);for(let side of [-1,1]){let spoke=box(.26,.075,.055,0x333b45,side*.20,0,0,wheel);spoke.rotation.z=side*.12;box(.13,.06,.025,0x687484,side*.20,.035,.04,wheel);}box(.07,.26,.055,0x333b45,0,-.18,0,wheel);let hub=new T.Mesh(new T.CylinderGeometry(.155,.17,.09,32),M(0x242a32));hub.rotation.x=Math.PI/2;wheel.add(hub);let logo=box(.075,.035,.014,0xb7c5d3,0,0,.053,wheel);let column=box(.17,.17,.39,0x272e37,-.96,2.17,-1.25,interior);let exterior=taxi.children.filter(o=>o!==interior);let indicator=0,headlights=false,headlightMode='AUTO',nightLevel=0;function toggleHeadlights(){headlightMode=headlightMode==='AUTO'?'ON':headlightMode==='ON'?'OFF':'AUTO';}
 const taxiBeams=[];for(let side of [-1,1]){let light=new T.SpotLight(0xfff4dc,0,78,.40,.7,1.6);light.position.set(side*1.18,1.56,-4.65);light.target.position.set(side*1.4,-.6,-39);taxi.add(light,light.target);taxiBeams.push(light);}
@@ -400,8 +433,11 @@ function emit(p,d,c){navPath.push(p.clone());if(!arrowMats.has(c))arrowMats.set(
 let dashWorldInterval=100;
 function renderDashboardWorld(now){
  const fx=-Math.sin(h),fz=-Math.cos(h);
- dashCamera.position.set(x-fx*31,y+43,z-fz*31);
- dashCamera.lookAt(x+fx*36,y+2,z+fz*36);
+ // Look mostly down onto the road with the player's taxi in the lower third.
+ const focusX=x+fx*34,focusZ=z+fz*34;
+ dashCamera.position.set(focusX-fx*54,y+125,focusZ-fz*54);
+ dashCamera.lookAt(focusX,y,focusZ);
+ dashMapMaterial.uniforms.night.value=nightLevel;
  dashCamera.updateMatrixWorld(true);
  const previousTarget=renderer.getRenderTarget(),previousInterior=interior.visible,previousRiders=riders.visible;
  const visibility=exterior.map(o=>o.visible),started=performance.now();
@@ -647,7 +683,7 @@ setInterval(cloudSave,5000);document.addEventListener('visibilitychange',()=>{if
 (async()=>{try{const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm');sb=createClient('https://pzxupuryrjgbboldfrna.supabase.co','sb_publishable_DfP264XeZ6SIO2zlyLZOVg_HtMk0a_h',{auth:{storage:sessionStorageAdapter,persistSession:true}});sb.auth.onAuthStateChange((event,session)=>{if(session&&event==='TOKEN_REFRESHED')setTimeout(()=>sb.realtime.setAuth(session.access_token),0);});const {data}=await sb.auth.getSession();if(data.session)await joinOnline(data.session);else statusOnline('Log in to see other players');}catch(e){statusOnline('Offline — account unavailable');}})();
 
 
-const liveVersion='2026-11-27-live-59';
+const liveVersion='2026-11-27-live-60';
 function restoreLiveUpdate(){try{let p=JSON.parse(sessionStorage.getItem('taxi-live-resume')||'null');if(!p||p.uid!==onlineUser?.id||Date.now()-p.at>600000)return;const findNode=v=>{if(!v)return -1;let best=-1,d=15;nodes.forEach((n,i)=>{let k=Math.hypot(n.x-v.x,n.z-v.z);if(k<d&&adj[i]?.length){best=i;d=k;}});return best;};if([p.x,p.y,p.z,p.h].every(Number.isFinite)){x=p.x;z=p.z;y=surfaceHeight(x,z,p.y);h=p.h;s=0;keys.clear();yaw=Number.isFinite(p.yaw)?p.yaw:0;taxi.rotation.set(0,h,0);taxi.position.set(x,y+.15,z);pitch=p.pitch??.35;zoom=p.zoom??22;}restoreOnline(p.progress);let dest=findNode(p.target);if(p.job){let a=findNode(p.a),b=findNode(p.b);if(a>=0&&b>=0){job={...p.job,a,b};target=job.stage===1?b:a;comfort=p.comfort;rideStart=performance.now()-p.elapsed;rideBudget=p.budget;if(job.stage===1)boardRiders();$('task').textContent=job.stage===1?'Drive to destination':'Pick up passenger';}else{job=null;target=-1;$('task').textContent='Road changed — choose a new ride';}}else target=dest;route();renderBoard();sessionStorage.removeItem('taxi-live-resume');}catch(e){console.warn('Update restore failed',e);}}
 async function checkLiveUpdate(){if(window.taxiUpdating||!readyOnline||!onlineUser||planetMode||richMode||georgeFlight||richFlight)return;try{let r=await fetch('/version.txt?updatecheck='+Date.now(),{cache:'no-store'});if(!r.ok)return;let html=(await r.text()).trim(),match=/^2026-\d\d-\d\d-live-\d+$/.test(html)?[html,html]:null;if(!match||match[1]===liveVersion)return;let snapshot={uid:onlineUser.id,at:Date.now(),x,y,z,h,speed:s,yaw,pitch,zoom,progress:progressOnline(),job:job?{...job}:null,a:job?nodes[job.a]:null,b:job?nodes[job.b]:null,target:target>=0?nodes[target]:null,comfort,elapsed:Math.max(0,performance.now()-rideStart),budget:rideBudget};sessionStorage.setItem('taxi-live-resume',JSON.stringify(snapshot));window.taxiUpdating=true;keys.clear();let overlay=document.createElement('div');overlay.style.cssText='position:fixed;inset:0;z-index:99999;background:#101c30f5;color:white;display:grid;place-content:center;text-align:center;font:18px Arial';overlay.innerHTML='<h1 style="color:#ffcc22;font-size:48px">UPDATE</h1><p>Saving your ride and loading the new city...</p><progress style="width:280px"></progress><p>Do not close this tab.</p>';document.body.append(overlay);await Promise.race([cloudSave(),new Promise(resolve=>setTimeout(resolve,1800))]);location.replace('/?v='+encodeURIComponent(match[1]));}catch(e){window.taxiUpdating=false;console.warn('Update check failed',e);}}
 setInterval(checkLiveUpdate,20000);
