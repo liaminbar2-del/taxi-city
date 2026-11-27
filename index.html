@@ -249,19 +249,19 @@ function junctionGuides(id){
  // Reject crossing or nearly duplicated interior paths, keeping only a clean separator.
  for(let i=1;i<points.length;i++)for(let old of accepted)for(let j=1;j<old.length;j++){let a=points[i-1],b=points[i],c=old[j-1],d=old[j],ux=b.x-a.x,uz=b.z-a.z,vx=d.x-c.x,vz=d.z-c.z,den=ux*vz-uz*vx;if(Math.abs(den)>.001){let qx=c.x-a.x,qz=c.z-a.z,t=(qx*vz-qz*vx)/den,u=(qx*uz-qz*ux)/den;if(t>.03&&t<.97&&u>.03&&u<.97)return;}if(i>1&&i<points.length-1&&Math.hypot(a.x-c.x,a.z-c.z)<.65)return;}
  accepted.push(points);let pieces=[],travel=0;
- for(let i=1;i<points.length;i++){let a=points[i-1],b=points[i],len=flat(a,b);if(len<.001)continue;let d=b.clone().sub(a).setY(0).normalize(),n=new T.Vector3(-d.z,0,d.x);let offset=0;while(offset<len-.00001){let phase=(travel+offset)%8,paint=solid||phase<4,step=solid?len-offset:Math.min(len-offset,Math.max(.00001,(paint?4:8)-phase));if(paint){let p=a.clone().lerp(b,offset/len),q=a.clone().lerp(b,(offset+step)/len),verts=[];for(let pos of [p,q])for(let side of [-1,1]){let v=pos.clone().addScaledVector(n,.10*side);verts.push(v.x,v.y+.25,v.z);}batchRoad(verts,[0,2,1,1,2,3],color);pieces.push([p,q]);}offset+=step;}travel+=len;}
+ for(let i=1;i<points.length;i++){let a=points[i-1],b=points[i],len=flat(a,b);if(len<.001)continue;let d=b.clone().sub(a).setY(0).normalize(),n=new T.Vector3(-d.z,0,d.x);let offset=0;while(offset<len-.00001){let period=arms.length>2?3:9,ink=arms.length>2?1.2:4.5,phase=(travel+offset)%period,paint=solid||phase<ink,step=solid?len-offset:Math.min(len-offset,Math.max(.00001,(paint?ink:period)-phase));if(paint){let p=a.clone().lerp(b,offset/len),q=a.clone().lerp(b,(offset+step)/len),verts=[];for(let pos of [p,q])for(let side of [-1,1]){let v=pos.clone().addScaledVector(n,.10*side);verts.push(v.x,v.y+.25,v.z);}batchRoad(verts,[0,2,1,1,2,3],color);pieces.push([p,q]);}offset+=step;}travel+=len;}
  marks.push({points,solid,color,pieces});
  }
  function connect(a,b,oa,ob,solid,color){let A=a.center.clone().addScaledVector(a.n,oa),B=b.center.clone().addScaledVector(b.n,ob),reach=Math.min(A.distanceTo(B)*.38,mouth(a.e,id)*.85,mouth(b.e,id)*.85);let c=new T.CubicBezierCurve3(A,A.clone().addScaledVector(a.d,-reach),B.clone().addScaledVector(b.d,-reach),B);add(c.getSpacedPoints(Math.max(3,Math.ceil(c.getLength()/.65))),solid,color);}
  if(arms.length===2){let [a,b]=arms;if(a.e.parking||b.e.parking||a.e.flowDir||b.e.flowDir)return;
- connect(a,b,0,0,true,white);let n=Math.min(a.e.lanes||1,b.e.lanes||1);for(let k=1;k<n;k++)for(let side of [-1,1]){let transit=a.e.transitLane&&b.e.transitLane&&k===n-1;connect(a,b,side*a.w*k/a.e.lanes,-side*b.w*k/b.e.lanes,transit,transit?0xf6d24a:white);}
+ connect(a,b,0,0,!!(a.e.high||b.e.high),white);let n=Math.min(a.e.lanes||1,b.e.lanes||1);for(let k=1;k<n;k++)for(let side of [-1,1]){let transit=a.e.transitLane&&b.e.transitLane&&k===n-1;connect(a,b,side*a.w*k/a.e.lanes,-side*b.w*k/b.e.lanes,transit,transit?0xf6d24a:white);}
  for(let side of [-1,1])connect(a,b,side*(a.w-.45),-side*(b.w-.45),true,white);
  }else{
  // One best opposing pair, never every possible turn across the same intersection.
  let pairs=[];for(let i=0;i<arms.length;i++)for(let j=i+1;j<arms.length;j++){let a=arms[i],b=arms[j];if(a.e.flowDir||b.e.flowDir||a.e.parking||b.e.parking||a.e.busOnly!==b.e.busOnly)continue;let dot=a.d.dot(b.d);if(dot<-.78)pairs.push({a,b,score:dot-.015*Math.min(a.e.lanes,b.e.lanes)});}
- pairs.sort((a,b)=>a.score-b.score);if(pairs.length){let {a,b}=pairs[0];connect(a,b,0,0,false,white);for(let k=1;k<Math.min(a.e.lanes,b.e.lanes);k++)for(let side of [-1,1])connect(a,b,side*a.w*k/a.e.lanes,-side*b.w*k/b.e.lanes,false,white);}
+ pairs.sort((a,b)=>a.score-b.score);if(pairs.length){let {a,b}=pairs[0];if(a.e.lanes===b.e.lanes&&a.e.lanes>1){for(let k=1;k<a.e.lanes;k++)for(let side of [-1,1]){if(a.e.transitLane||b.e.transitLane){if(k===a.e.lanes-1)continue;}connect(a,b,side*a.w*k/a.e.lanes,-side*b.w*k/b.e.lanes,false,white);}}}
  // Curved outer boundaries link neighboring road edges, not lane centers.
- for(let {a,b,pts} of corners){let points=pts.map((p,i)=>{let d=pts[Math.min(i+1,pts.length-1)].clone().sub(pts[Math.max(0,i-1)]).setY(0).normalize();return p.clone().addScaledVector(new T.Vector3(-d.z,0,d.x),.45);});add(points,true);}
+ // Junction corners remain bounded by curbs; no solid paint across intersecting traffic.
  }dashJunctionGuides.set(id,marks);
 }
 function safeSidewalk(v,ix,c){let out=[];for(let k=0;k<ix.length;k+=3){let a=ix[k]*3,b=ix[k+1]*3,d=ix[k+2]*3,ok=true;for(let i=0;i<=2&&ok;i++)for(let j=0;j<=2-i;j++){let u=i/2,w=j/2,t=1-u-w;if(roadFootprint(v[a]*u+v[b]*w+v[d]*t,v[a+2]*u+v[b+2]*w+v[d+2]*t,v[a+1]*u+v[b+1]*w+v[d+1]*t,-.12)){ok=false;break;}}if(ok)out.push(ix[k],ix[k+1],ix[k+2]);}if(out.length)batchRoad(v,out,c);}
@@ -297,7 +297,7 @@ function paintRoadDetails(e){let l=flat(e.p,e.q);if(!Number.isFinite(l)||l<.01||
  const dashed=(offset,width,color,solid=false)=>{let step=solid?2:9,mark=solid?2:4.5;for(let d=a*l;d<b*l;d+=step){let t=d/l,u=Math.min(b,(d+mark)/l);if(u>t)line(t,u,offset,width,color);}};
  for(let side of [-1,1])dashed(t=>side*(widthAt(e,t)/2+bayExtent(e,t,side)-.45),.22,white,true);if(e.parking)return;
  if(e.flowDir){for(let k=1;k<n;k++)dashed(t=>widthAt(e,t)*(.5-k/n),.20,white);}
- else{dashed(()=>0,.25,white,e.high||e.busOnly);for(let k=1;k<n;k++)for(let side of [-1,1]){if(e.transitLane&&k===n-1)continue;dashed(t=>side*widthAt(e,t)*k/(2*n),.20,white);}}
+ else{dashed(()=>0,.25,white,e.high||e.busOnly);for(let k=1;k<n;k++)for(let side of [-1,1]){if(e.transitLane&&k===n-1)continue;dashed(t=>side*widthAt(e,t)*k/(2*n),.27,white);}}
  if(e.bridge)for(let side of [-1,1])strip(e,side*(e.w/2+walkWidth(e)),.3,0x898f94,.8);
 }
 function paintTransitRoads(){for(let b of transitStops){let e=b.e,d=e.q.clone().sub(e.p).setY(0).normalize(),n=new T.Vector3(-d.z,0,d.x),v=[],ix=[],edgeV=[],edgeI=[];for(let i=0;i<=88;i++){let t=b.t+(i-44)/b.length,w=widthAt(e,t)/2,p=e.p.clone().lerp(e.q,t),outer=w+bayExtent(e,t,b.dir);for(let off of [w,outer]){let q=p.clone().addScaledVector(n,b.dir*off);v.push(q.x,q.y+.174,q.z);}for(let off of [outer-.25,outer-.08]){let q=p.clone().addScaledVector(n,b.dir*off);edgeV.push(q.x,q.y+.235,q.z);}if(i){let j=i*2;ix.push(j-2,j,j-1,j-1,j,j+1);edgeI.push(j-2,j,j-1,j-1,j,j+1);}}batchRoad(v,ix,asphalt);}
@@ -1235,7 +1235,7 @@ void main(){
  vec3 origin=center-vec3(52.0,10.0,52.0);
  vec3 raw=position+wind*elapsed+drift-vec3(0.0,speed*elapsed,0.0);
  vec3 p=origin+mod(raw-origin,extent);
- if(kind>0.5&&kind<1.5)p+=tail*vec3(-wind.x*0.07,speed*0.07,-wind.z*0.07);
+ if(kind>0.5&&kind<1.5)p+=tail*vec3(-wind.x*0.07,speed*(0.035+strength*.09),-wind.z*0.07);
  float d=distance(p,center);
  float edge=min(min(p.y-origin.y,origin.y+extent.y-p.y),min(52.0-abs(p.x-center.x),52.0-abs(p.z-center.z)));
  opacityFactor=smoothstep(2.0,6.0,d)*(1.0-smoothstep(38.0,52.0,d))*smoothstep(0.0,5.0,edge);
@@ -1249,7 +1249,7 @@ uniform vec3 tint;
 uniform float kind;
 varying float opacityFactor;
 void main(){
- float alpha=opacityFactor*(0.25+0.75*strength);
+ float alpha=opacityFactor*(0.12+0.88*strength);
  #ifdef FLAKE
  float r=length(gl_PointCoord-vec2(0.5))*2.0;
  alpha*=1.0-smoothstep(0.35,1.0,r);
@@ -1258,7 +1258,7 @@ void main(){
 }
 `;
 function createPrecipitation(count,rain){let coords=[],seeds=[],tails=[],seed=927;function rnd(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}for(let i=0;i<count;i++){let px=rnd()*104,py=rnd()*53,pz=rnd()*104,a=rnd();for(let j=0;j<(rain?2:1);j++){coords.push(px,py,pz);seeds.push(a);tails.push(j);}}let g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(coords,3));g.setAttribute('seed',new T.Float32BufferAttribute(seeds,1));g.setAttribute('tail',new T.Float32BufferAttribute(tails,1));let m=new T.ShaderMaterial({uniforms:weatherUniforms,vertexShader:weatherVertex,fragmentShader:weatherFragment,defines:rain?{}:{FLAKE:1},transparent:true,depthWrite:false});let obj=rain?new T.LineSegments(g,m):new T.Points(g,m);obj.frustumCulled=false;obj.visible=false;scene.add(obj);return obj;}
-const rainWeather=createPrecipitation(2400,true),flakeWeather=createPrecipitation(1500,false);
+const rainWeather=createPrecipitation(5200,true),flakeWeather=createPrecipitation(1500,false);
 let weather='Clear',weatherVisual='Clear',localWeather={kind:'Clear',power:0},weatherCells=[],lastWeatherRefresh=-Infinity;
 const weatherColors={Rain:'#327ac9',Thunderstorm:'#744dc5',Fog:'#a8bbc5',Snow:'#d4ebff',Sandstorm:'#cba04e','Ash storm':'#77747e'};
 function weatherHash(n){let v=Math.sin(n*127.1+311.7)*43758.5453;return v-Math.floor(v);}
@@ -1340,9 +1340,22 @@ function updateCycloneScenery(now){
  for(let w of weatherCells){if(!w.cyclone||w.power<=1.05||Math.hypot(w.x-x,w.z-z)>w.r+220)continue;let n=perfMode==='low'?22:64;for(let i=0;i<n&&debrisCount<96;i++){let a=now*.001*(.6+weatherHash(i+8)*1.5)+i*2.39996,r=w.r*(.06+.67*weatherHash(i+4)),xx=w.x+Math.cos(a)*r,zz=w.z+Math.sin(a)*r;if(Math.hypot(xx-x,zz-z)>230)continue;let yy=ground(xx,zz)+4+45*weatherHash(i+9)+7*Math.sin(a*1.7);stormTransform.position.set(xx,yy,zz);stormTransform.rotation.set(a*2,a*.8,a*1.4);let size=.15+weatherHash(i+3)*.8;stormTransform.scale.set(size,size*.28,size*2.2);stormTransform.updateMatrix();stormDebris.setMatrixAt(debrisCount++,stormTransform.matrix);}}
  stormDebris.count=debrisCount;stormDebris.instanceMatrix.needsUpdate=true;
 }
-function updateWeatherVisual(now){updateCycloneScenery(now);let w=localWeather.kind,p=localWeather.power,loss=({Fog:.89,Sandstorm:.91,'Ash storm':.86,Thunderstorm:.78,Snow:.64,Rain:.48})[w]||0;scene.fog.near=Math.min(350,perfViewRange*.32)*(1-p*loss);scene.fog.far=localWeather.cyclone?Math.max(28,perfViewRange*(1-p*.975)):Math.max(65,perfViewRange*(1-p*loss));rainWeather.visible=p>.02&&(w==='Rain'||w==='Thunderstorm');flakeWeather.visible=p>.02&&(w==='Snow'||w==='Sandstorm'||w==='Ash storm');
+// Distant storm clouds and rain curtains track the same cells as the radar.
+const stormCloudCanvas=document.createElement('canvas');stormCloudCanvas.width=stormCloudCanvas.height=128;{let c=stormCloudCanvas.getContext('2d'),g=c.createRadialGradient(64,64,5,64,64,63);g.addColorStop(0,'rgba(255,255,255,.96)');g.addColorStop(.4,'rgba(255,255,255,.83)');g.addColorStop(.76,'rgba(255,255,255,.35)');g.addColorStop(1,'rgba(255,255,255,0)');c.fillStyle=g;c.fillRect(0,0,128,128);}
+const stormCloudTex=new T.CanvasTexture(stormCloudCanvas),stormSkyGroups=new Map();
+const rainCurtainCanvas=document.createElement('canvas');rainCurtainCanvas.width=128;rainCurtainCanvas.height=256;{let c=rainCurtainCanvas.getContext('2d');for(let i=0;i<170;i++){let xx=weatherHash(i*13+2)*128,yy=weatherHash(i*17+4)*256;c.strokeStyle='rgba(190,205,220,'+(.04+weatherHash(i+9)*.17)+')';c.lineWidth=.6+weatherHash(i+3);c.beginPath();c.moveTo(xx,yy);c.lineTo(xx-5,yy+35+weatherHash(i)*55);c.stroke();}c.globalCompositeOperation='destination-in';let g=c.createRadialGradient(64,100,10,64,128,100);g.addColorStop(0,'white');g.addColorStop(1,'transparent');c.fillStyle=g;c.fillRect(0,0,128,256);}
+const rainCurtainTex=new T.CanvasTexture(rainCurtainCanvas);
+function updateStormSky(now){
+ let seen=new Set();for(let w of weatherCells){seen.add(w.id);let o=stormSkyGroups.get(w.id);if(!o){let g=new T.Group(),clouds=[],curtains=[];for(let i=0;i<23;i++){let mat=new T.SpriteMaterial({map:stormCloudTex,color:0x677681,transparent:true,depthWrite:false,fog:true});let p=new T.Sprite(mat);g.add(p);clouds.push(p);}for(let i=0;i<5;i++){let mat=new T.SpriteMaterial({map:rainCurtainTex,color:0xb2c2ce,transparent:true,depthWrite:false,fog:true});let p=new T.Sprite(mat);g.add(p);curtains.push(p);}scene.add(g);o={g,clouds,curtains};stormSkyGroups.set(w.id,o);}
+ let p=Math.min(1,w.power),rain=['Rain','Thunderstorm','Snow','Sandstorm','Ash storm'].includes(w.kind),height=Math.max(105,ground(w.x,w.z)+105),col=new T.Color(w.kind==='Sandstorm'?0xb29a73:w.kind==='Ash storm'?0x625e60:0xaebbc5).lerp(new T.Color(0x26323d),Math.pow(p,1.1));o.g.position.set(w.x,0,w.z);o.g.visible=Math.hypot(w.x-x,w.z-z)<w.r+1900;
+ for(let [i,cloud] of o.clouds.entries()){let angle=i*2.39996+w.angle*.22,r=w.r*(.1+.77*weatherHash(i*7+w.id)),xx=Math.cos(angle)*r,zz=Math.sin(angle)*r,top=height+weatherHash(i*13+w.id)*(35+110*p);cloud.position.set(xx,top,zz);cloud.scale.set(w.r*(.48+.55*weatherHash(i+4)),(55+125*p)*(.65+weatherHash(i+5)*.6),1);cloud.material.color.copy(col);cloud.material.opacity=Math.min(.93,p*(.42+.49*weatherHash(i+6)));}
+ for(let [i,c] of o.curtains.entries()){let a=i*2.39996+w.angle*.2,r=w.r*.32,xx=Math.cos(a)*r,zz=Math.sin(a)*r,base=ground(w.x+xx,w.z+zz);c.position.set(xx,(base+height)/2,zz);c.scale.set(w.r*.85,Math.max(20,height-base),1);c.material.opacity=rain?Math.pow(p,1.4)*.68:0;c.visible=rain&&p>.12;}
+ }
+ for(let [id,o] of stormSkyGroups)if(!seen.has(id)){scene.remove(o.g);for(let p of [...o.clouds,...o.curtains])p.material.dispose();stormSkyGroups.delete(id);}
+}
+function updateWeatherVisual(now){updateCycloneScenery(now);updateStormSky(now);let w=localWeather.kind,p=localWeather.power,loss=({Fog:.89,Sandstorm:.91,'Ash storm':.86,Thunderstorm:.92,Snow:.81,Rain:.82})[w]||0;scene.fog.near=Math.min(350,perfViewRange*.32)*(1-p*loss);scene.fog.far=localWeather.cyclone?Math.max(28,perfViewRange*(1-p*.975)):Math.max(65,perfViewRange*(1-Math.pow(p,1.05)*loss));rainWeather.visible=p>.02&&(w==='Rain'||w==='Thunderstorm');flakeWeather.visible=p>.02&&(w==='Snow'||w==='Sandstorm'||w==='Ash storm');
  weatherUniforms.strength.value=p;weatherUniforms.elapsed.value=now*.001;camera.getWorldPosition(weatherUniforms.center.value);weatherUniforms.kind.value=rainWeather.visible?1:w==='Sandstorm'||w==='Ash storm'?2:0;weatherUniforms.pixelScale.value=renderer.getPixelRatio();weatherUniforms.tint.value.setHex(w==='Sandstorm'?0xd9b17a:w==='Ash storm'?0x9b9690:rainWeather.visible?0xc1d9ec:0xffffff);
- let low=perfMode==='low'||perfFrameAverage>34;rainWeather.geometry.setDrawRange(0,Math.floor((low?900:2400)*p)*2);flakeWeather.geometry.setDrawRange(0,Math.floor((low?600:1500)*p));
+ let low=perfMode==='low'||perfFrameAverage>34;rainWeather.geometry.setDrawRange(0,Math.floor((low?1600:5200)*Math.pow(p,1.65))*2);flakeWeather.geometry.setDrawRange(0,Math.floor((low?600:1500)*p));
  for(let [color,mat] of roadTextureMaterials)if(color===0x42474d||color===asphalt)mat.roughness=.94-(rainWeather.visible?.48*p:0);
 }
 function megaIcons(c,X,Z){} // landmarks are baked into the geographic map
@@ -1660,7 +1673,7 @@ setInterval(cloudSave,5000);setInterval(()=>{advertiseCityPresence();electCityHo
 (async()=>{try{const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm');sb=createClient('https://pzxupuryrjgbboldfrna.supabase.co','sb_publishable_DfP264XeZ6SIO2zlyLZOVg_HtMk0a_h',{auth:{storage:sessionStorageAdapter,persistSession:true}});sb.auth.onAuthStateChange((event,session)=>{if(session&&event==='TOKEN_REFRESHED')setTimeout(()=>sb.realtime.setAuth(session.access_token),0);});const {data}=await sb.auth.getSession();if(data.session)await joinOnline(data.session);else statusOnline('Log in to see other players');}catch(e){statusOnline('Offline — account unavailable');}})();
 
 
-const liveVersion='2026-11-27-live-112';
+const liveVersion='2026-11-27-live-113';
 function snapshotBus(){return busMode?{mode:true,line:busLine?{number:busLine.number,name:busLine.name,stops:busLine.stops.map(b=>({id:b.id,x:b.p.x,z:b.p.z,dir:b.dir})),legs:busLine.legs.slice(),approach:busLine.approach||0,payout:estimateBusReward(busLine)}:null,index:busStopIndex,seats:busOccupants.map(p=>p.seat),earned:busEarned}:null;}
 function restoreBus(p){if(!p?.mode)return false;toggleBusMode(true);if(!busMode)return false;busEarned=Number.isFinite(p.earned)?Math.max(0,p.earned):0;if(!p.line)return true;let stops=p.line.stops.map(q=>transitStops.find(b=>b.id===q.id&&b.dir===q.dir&&Math.hypot(b.p.x-q.x,b.p.z-q.z)<12)||transitStops.filter(b=>b.dir===q.dir).sort((a,b)=>Math.hypot(a.p.x-q.x,a.p.z-q.z)-Math.hypot(b.p.x-q.x,b.p.z-q.z)).find(b=>Math.hypot(b.p.x-q.x,b.p.z-q.z)<28));if(stops.some(b=>!b)||!Number.isInteger(p.index)||p.index<0||p.index>=stops.length||p.line.legs.length!==stops.length){$('task').textContent=tr('Road changed — choose a new line');return true;}busLine={number:p.line.number,name:p.line.name,stops,legs:p.line.legs,approach:Number.isFinite(p.line.approach)?p.line.approach:0,payout:Number.isFinite(p.line.payout)?Math.max(5000,Math.min(52000,p.line.payout)):undefined};busStopIndex=p.index;for(let i of [...new Set(p.seats||[])]){let seat=busSeats[i];if(!seat)continue;let g=person(busRiderGroup,seat.x,seat.y,seat.z,true,i);g.scale.setScalar(.78);busOccupants.push({g,seat:i});}setBusTarget();updateBusSign();renderBusBoard();return true;}
 function restoreLiveUpdate(){try{let p=JSON.parse(sessionStorage.getItem('taxi-live-resume')||'null');if(!p||p.uid!==onlineUser?.id||Date.now()-p.at>600000)return;const findNode=v=>{if(!v)return -1;let best=-1,d=15;nodes.forEach((n,i)=>{let k=Math.hypot(n.x-v.x,n.z-v.z);if(k<d&&adj[i]?.length){best=i;d=k;}});return best;};if([p.x,p.y,p.z,p.h].every(Number.isFinite)){x=p.x;z=p.z;y=surfaceHeight(x,z,p.y);h=p.h;s=0;keys.clear();yaw=Number.isFinite(p.yaw)?p.yaw:0;taxi.rotation.set(0,h,0);taxi.position.set(x,y+.15,z);pitch=p.pitch??.35;zoom=p.zoom??22;}restoreOnline(p.progress);if(restoreBus(p.bus)){sessionStorage.removeItem('taxi-live-resume');return;}let dest=findNode(p.target);if(p.job){let a=findNode(p.a),b=findNode(p.b);if(a>=0&&b>=0){job={...p.job,a,b};target=job.stage===1?b:a;comfort=p.comfort;rideStart=performance.now()-p.elapsed;rideBudget=p.budget;if(job.stage===1)boardRiders();$('task').textContent=job.stage===1?'Drive to destination':'Pick up passenger';}else{job=null;target=-1;$('task').textContent='Road changed — choose a new ride';}}else target=dest;route();renderBoard();sessionStorage.removeItem('taxi-live-resume');}catch(e){console.warn('Update restore failed',e);}}
