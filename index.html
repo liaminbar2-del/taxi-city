@@ -1663,8 +1663,8 @@ const humanTemplates=new Map(),humanMaterial=new T.MeshStandardMaterial({vertexC
 const humanShapes=new Map();
 function humanShape(kind,high){
  let key=kind+':'+high;if(humanShapes.has(key))return humanShapes.get(key);
- let n=high?20:10,geo;
- if(kind==='sphere')geo=new T.SphereGeometry(1,n,high?14:7);
+ let n=high?16:8,geo;
+ if(kind==='sphere')geo=new T.SphereGeometry(1,n,high?10:6);
  else if(kind==='box')geo=new T.BoxGeometry(1,1,1);
  else {
   let profiles={torso:[[.72,-1],[.84,-.87],[.79,-.43],[.84,.04],[.99,.57],[1,.72],[.80,.94],[.48,1]],head:[[.03,-1],[.40,-.96],[.69,-.80],[.84,-.48],[.96,-.08],[1,.30],[.93,.69],[.65,.91],[.03,1]],limb:[[.50,-1],[.67,-.82],[.89,-.50],[1,.03],[.94,.52],[.70,.88],[.42,1]],hair:[[.02,-1],[.83,-.70],[1,-.22],[1,.30],[.86,.75],[.51,.94],[.02,1]],shoe:[[.12,-1],[.85,-.88],[1,-.40],[.92,.40],[.60,.85],[.08,1]]};
@@ -1729,13 +1729,13 @@ function humanTemplate(index,high){
  let geometries=groups.map(parts=>{let v=[],n=[],colors=[];for(let p of parts){let geom=humanShape(p.kind,high),a=geom.attributes.position,b=geom.attributes.normal,col=new T.Color(p.col);matrix.compose(pos.set(p.x,p.y,p.z),rot.setFromEuler(euler.set(p.rx,p.ry,p.rz)),scale.set(p.sx,p.sy,p.sz));normalMatrix.getNormalMatrix(matrix);for(let i=0;i<a.count;i++){tmp.fromBufferAttribute(a,i).applyMatrix4(matrix);v.push(tmp.x,tmp.y,tmp.z);tmp.fromBufferAttribute(b,i).applyNormalMatrix(normalMatrix);n.push(tmp.x,tmp.y,tmp.z);colors.push(col.r,col.g,col.b);}}let g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(v,3));g.setAttribute('normal',new T.Float32BufferAttribute(n,3));g.setAttribute('color',new T.Float32BufferAttribute(colors,3));g.computeBoundingSphere();return g;});
  humanTemplates.set(key,geometries);return geometries;
 }
-function setHumanLOD(rig,high){if(rig.high===high)return;let geo=humanTemplate(rig.index,high);for(let i=0;i<rig.meshes.length;i++)rig.meshes[i].geometry=geo[i];rig.high=high;}
+let humanBuildBudget=1;function setHumanLOD(rig,high){if(rig.high===high)return;if(high&&!humanTemplates.has(rig.index+':true')){if(humanBuildBudget<=0)return;humanBuildBudget--;}let geo=humanTemplate(rig.index,high);for(let i=0;i<rig.meshes.length;i++)rig.meshes[i].geometry=geo[i];rig.high=high;}
 function humanRig(parent,i,seated=false){
  const actor=new T.Group(),body=new T.Group(),head=new T.Group(),legs=[],arms=[],joints=[body,head];parent.add(actor);actor.add(body);head.position.set(0,1.63,0);body.add(head);
  for(let side of [-1,1]){let hip=new T.Group(),knee=new T.Group();hip.position.set(side*.122,.86,0);body.add(hip);knee.position.y=-.39;hip.add(knee);legs.push({hip,knee});joints.push(hip,knee);}
  for(let side of [-1,1]){let shoulder=new T.Group(),elbow=new T.Group();shoulder.position.set(side*.269,1.465,0);body.add(shoulder);elbow.position.y=-.30;shoulder.add(elbow);arms.push({shoulder,elbow});joints.push(shoulder,elbow);}
- let index=((Math.floor(i)||0)%12+12)%12,geometry=humanTemplate(index,!!seated),meshes=joints.map((joint,k)=>{let m=new T.Mesh(geometry[k],humanMaterial);joint.add(m);return m;});
- const rig={actor,body,head,legs,arms,seated,index,meshes,high:!!seated,moving:false,offset:index*.73,gait:0,phase:index*.83,lastPose:0,baseY:0};actor.userData.human=rig;poseHuman(rig,0,0);return rig;
+ let index=((Math.floor(i)||0)%12+12)%12,geometry=humanTemplate(index,false),meshes=joints.map((joint,k)=>{let m=new T.Mesh(geometry[k],humanMaterial);joint.add(m);return m;});
+ const rig={actor,body,head,legs,arms,seated,index,meshes,high:false,moving:false,offset:index*.73,gait:0,phase:index*.83,lastPose:0,baseY:0};actor.userData.human=rig;poseHuman(rig,0,0);return rig;
 }
 function poseHuman(rig,now,dt){
  let phase=rig.phase,idle=now*.0011+rig.offset;
@@ -1749,7 +1749,7 @@ function poseHuman(rig,now,dt){
 function animateHuman(actor,now,moving,offset=0){let rig=actor?.userData.human;if(!rig)return;rig.moving=!!moving;rig.offset=offset%100;}
 let lastHumanLOD=0;
 function updateHumanModels(now,dt){
- let cabinVisible=zoom<5||renderer.xr.isPresenting,check=now-lastHumanLOD>450;if(check)lastHumanLOD=now;
+ let cabinVisible=zoom<5||renderer.xr.isPresenting,check=now-lastHumanLOD>250;if(check){lastHumanLOD=now;humanBuildBudget=1;}
  function visit(actor,inside=false){if(!actor?.visible)return;let rig=actor.userData.human;if(!rig)return;if(check){let p=actor.getWorldPosition(new T.Vector3()),distance=Math.hypot(p.x-x,p.z-z);setHumanLOD(rig,inside&&cabinVisible||distance<(perfFrameAverage>30?20:42));}poseHuman(rig,now,Math.min(.10,Math.max(.001,dt)));}
  for(let w of sidewalkWalkers)visit(w.actor);for(let p of pedestrians)visit(p.person);for(let b of transitStops)for(let p of b.people)visit(p.actor);
  for(let g of waiting.children)visit(g);for(let g of busWaiting.children)visit(g);if(cabinVisible&&!busMode)for(let g of riders.children)visit(g,true);if(busMode&&busRiderGroup&&(cabinVisible||busAnimation))for(let g of busRiderGroup.children)visit(g,true);
