@@ -686,44 +686,44 @@ function car(c){
  function quad(points,mat){return mesh(points.flat(),[0,1,2,0,2,3],mat);}
  // Smooth cross-section interpolation. Wheel openings affect the side sill only, not the bonnet.
  const front=-2.78,rear=2.86;
- const profiles=[[-4.72,1.42,.87,1.45],[-4.53,1.81,.70,1.60],[-4.15,2.03,.58,1.74],[-3.50,2.13,.52,1.83],[-2.78,2.17,.52,1.92],[-1.7,2.12,.52,2.07],[-.4,2.10,.53,2.10],[1.0,2.11,.53,2.10],[2.2,2.15,.53,2.08],[2.86,2.18,.53,2.06],[3.52,2.09,.58,1.97],[4.20,1.99,.64,1.84],[4.54,1.79,.76,1.65],[4.70,1.51,.86,1.49]];
+ const profiles=[[-4.72,1.65,.84,1.51],[-4.60,1.89,.72,1.64],[-4.35,2.05,.62,1.76],[-3.90,2.13,.54,1.80],[-3.40,2.18,.53,1.86],[-2.78,2.18,.52,1.92],[-1.7,2.14,.52,2.05],[-.4,2.09,.53,2.10],[1.0,2.10,.53,2.11],[2.2,2.14,.53,2.12],[2.86,2.18,.53,2.13],[3.42,2.15,.56,2.10],[3.95,2.09,.60,2.07],[4.35,2.01,.65,2.02],[4.58,1.91,.73,1.91],[4.70,1.72,.82,1.78]];
  function sample(rows,z){let k=0;while(k<rows.length-2&&rows[k+1][0]<z)k++;let A=rows[k],B=rows[k+1],t=T.MathUtils.clamp((z-A[0])/(B[0]-A[0]),0,1);return A.map((n,i)=>{if(i===0)return z;let P=rows[Math.max(0,k-1)][i],Q=rows[Math.min(rows.length-1,k+2)][i],a=A[i],b=B[i],m0=(b-P)*.5,m1=(Q-a)*.5;return T.MathUtils.clamp((2*t*t*t-3*t*t+1)*a+(t*t*t-2*t*t+t)*m0+(-2*t*t*t+3*t*t)*b+(t*t*t-t*t)*m1,Math.min(a,b),Math.max(a,b));});}
  function bodyRing(z){let [,w,lo,hi]=sample(profiles,z),arch=lo;for(let ax of [front,rear]){let u=(z-ax)/1.03;if(Math.abs(u)<1)arch=Math.max(arch,r+Math.sqrt(1-u*u)*1.03);}arch=Math.min(hi-.10,arch);
-  return [[-w*.67,lo],[-w*.83,lo],[-w*.97,arch],[-w,arch+.08],[-w,hi-.29],[-w*.95,hi-.13],[-w*.82,hi-.035],[-w*.48,hi+.01],[0,hi+.045],[w*.48,hi+.01],[w*.82,hi-.035],[w*.95,hi-.13],[w,hi-.29],[w,arch+.08],[w*.97,arch],[w*.83,lo],[w*.67,lo]];
+  return [[-w*.67,lo],[-w*.84,lo],[-w*.97,arch],[-w,Math.min(hi-.09,arch+.10)],[-w*.995,Math.max(arch+.02,hi-.32)],[-w*.94,hi-.14],[-w*.83,hi-.035],[-w*.48,hi+.015],[0,hi+.055],[w*.48,hi+.015],[w*.83,hi-.035],[w*.94,hi-.14],[w*.995,Math.max(arch+.02,hi-.32)],[w,Math.min(hi-.09,arch+.10)],[w*.97,arch],[w*.84,lo],[w*.67,lo]];
  }
  function loft(z0,z1,n,ring,mat){let v=[],ix=[],count=0;for(let i=0;i<=n;i++){let z=z0+(z1-z0)*i/n,R=ring(z);count=R.length;for(let [x,y] of R)v.push(x,y,z);}for(let i=0;i<n;i++)for(let j=0;j<count;j++){let a=i*count+j,b=i*count+(j+1)%count;ix.push(a,b,a+count,b,b+count,a+count);}for(let j=1;j<count-1;j++){ix.push(0,j+1,j);let k=n*count;ix.push(k,k+j,k+j+1);}return mesh(v,ix,mat);}
  loft(-4.72,4.70,104,bodyRing,paint);
- const cabin=[[-2.62,1.80,2.04,2.08],[-2.15,1.77,2.06,2.55],[-1.52,1.68,2.08,3.14],[-.91,1.59,2.09,3.48],[-.35,1.58,2.10,3.53],[.75,1.58,2.10,3.55],[1.30,1.57,2.10,3.47],[1.90,1.64,2.10,3.14],[2.46,1.73,2.08,2.60],[2.92,1.82,2.07,2.10]];
+ const cabin=[[-2.62,1.80,2.04,2.10],[-2.15,1.77,2.06,2.55],[-1.52,1.68,2.08,3.14],[-.91,1.59,2.09,3.48],[-.35,1.58,2.10,3.53],[.75,1.58,2.10,3.55],[1.55,1.57,2.11,3.53],[2.04,1.56,2.12,3.44],[2.47,1.66,2.13,3.12],[2.92,1.74,2.12,2.67],[3.43,1.82,2.10,2.14]];
  function greenhouse(z){let [,w,lo,hi]=sample(cabin,z);return [[-w,lo],[-w*.96,lo+(hi-lo)*.42],[-w*.87,hi-.07],[-w*.72,hi],[0,hi+.035],[w*.72,hi],[w*.87,hi-.07],[w*.96,lo+(hi-lo)*.42],[w,lo]];}
- loft(-2.62,2.92,58,greenhouse,glass);
+ loft(-2.62,3.43,66,greenhouse,glass);
  function roofRing(z){let [,w,lo,hi]=sample(cabin,z);return [[-w*.87,hi-.09],[-w*.81,hi-.01],[-w*.48,hi+.05],[0,hi+.072],[w*.48,hi+.05],[w*.81,hi-.01],[w*.87,hi-.09]];}
- loft(-1.03,1.43,34,roofRing,paint);
+ loft(-1.03,2.04,38,roofRing,paint);
  function part(w,h,d,col,x,y,z){return box(w,h,d,col,x,y,z,ext);}
  function stripOnSide(side,z0,z1,y0,y1,width,mat){let a=sample(cabin,z0),b=sample(cabin,z1);let ax=side*a[1]*.93,bx=side*b[1]*.93;quad([[ax,y0,z0],[ax,y0+width,z0],[bx,y1+width,z1],[bx,y1,z1]],mat);}
  for(let side of [-1,1]){
   for(let z of [front,rear]){vehicleWheel(ext,side*2.02,z,r,.63);carArchTrim(ext,side*2.18,z,r,c);}
   // Body-colored pillars follow the glass contour, with a dark central pillar.
-  for(let [z0,z1] of [[-2.45,-.92],[1.35,2.79]]){let a=sample(cabin,z0),b=sample(cabin,z1);quad([[side*a[1],a[2],z0],[side*a[1]*.95,a[2]+.14,z0],[side*b[1]*.87,b[3],z1],[side*b[1]*.81,b[3]-.14,z1]],paint);}
+  for(let [z0,z1] of [[-2.45,-.92],[3.36,2.04]]){let a=sample(cabin,z0),b=sample(cabin,z1);quad([[side*a[1],a[2],z0],[side*a[1]*.95,a[2]+.14,z0],[side*b[1]*.87,b[3],z1],[side*b[1]*.81,b[3]-.14,z1]],paint);}
   let p=part(.11,1.27,.18,0x242d34,side*1.49,2.76,.18);p.rotation.z=-side*.15;
-  for(let z of [-.75,1.22]){part(.09,.09,.40,c,side*2.11,1.76,z);part(.045,.036,.27,0x333c42,side*2.16,1.73,z);}
-  for(let z of [-1.49,.30,2.12]){let d=part(.021,.90,.038,0x565752,side*2.113,1.36,z);d.rotation.z=-side*.015;}
+  for(let z of [-.75,1.48]){part(.075,.075,.39,c,side*2.105,1.82,z);part(.032,.026,.29,0x41474a,side*2.15,1.786,z);}
+  for(let z of [-1.49,.30,2.12]){let d=part(.018,.88,.027,0x36383a,side*2.112,1.38,z);d.rotation.z=-side*.015;}for(let j=0;j<18;j++){let z=-1.65+j*.235,a=sample(profiles,z),b=sample(profiles,z+.235);quad([[side*a[1]*.984,a[3]-.26,z],[side*a[1]*.984,a[3]-.30,z],[side*b[1]*.984,b[3]-.30,z+.235],[side*b[1]*.984,b[3]-.26,z+.235]],paint);}
   part(.055,.08,5.2,0x30383e,side*2.12,2.01,.15);part(.065,.12,5.7,0x333b42,side*2.05,.72,0);
   let mount=part(.33,.12,.24,0x222a30,side*2.08,2.09,-1.91);
   const mirror=new T.Mesh(new T.SphereGeometry(1,20,12),paint);mirror.scale.set(.38,.20,.34);mirror.position.set(side*2.36,2.22,-1.86);ext.add(mirror);let mirrorGlass=part(.075,.21,.38,0x9cafba,side*2.60,2.22,-1.84);mirrorGlass.rotation.y=side*.15;
-  for(let [z,yy,col] of [[-4.48,1.62,0xf3f8ff],[4.51,1.68,0xc52032]]){
-   let mat=new T.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0,roughness:.17,side:T.DoubleSide}),out=side*1.92,inside=side*.79,frontFace=z<0;
+  for(let [z,yy,col] of [[-4.55,1.68,0xf3f8ff],[4.61,1.83,0xc52032]]){
+   let mat=new T.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0,roughness:.14,side:T.DoubleSide}),out=side*1.94,inside=side*.67,frontFace=z<0;let darkZ=frontFace?-4.735:4.724;part(1.12,.22,.055,frontFace?0x242a31:0x74232c,side*1.24,yy-.01,darkZ);
    // Wrapped lamps integrated into the tapered nose and tail.
    quad([[inside,yy+.11,z+(frontFace?-.19:.12)],[side*1.61,yy+.10,z],[out,yy+.04,z+(frontFace?.31:-.23)],[inside,yy-.09,z+(frontFace?-.19:.12)]],mat);
    quad([[inside,yy+.13,z+(frontFace?-.21:.14)],[side*1.61,yy+.12,z],[side*1.61,yy+.07,z],[inside,yy+.08,z+(frontFace?-.21:.14)]],mat);
-   lights.push({m:mat,side,z});
+   for(let j=0;j<3;j++){let px=side*(.83+j*.34);let led=part(.23,.045,.055,frontFace?0xf8f5e8:0xe83949,px,yy+.035,frontFace?-4.77:4.76);led.material=mat;}lights.push({m:mat,side,z});
    let ind=new T.MeshStandardMaterial({color:0xfab342,emissive:0xffa020,emissiveIntensity:0,side:T.DoubleSide});quad([[side*1.52,yy-.08,z],[out,yy-.06,z+(frontFace?.31:-.23)],[out,yy-.15,z+(frontFace?.31:-.23)],[side*1.52,yy-.17,z]],ind);lights.push({m:ind,side,z,indicator:true});
   }
   part(.42,.16,.10,0x2c343b,side*1.27,1.00,-4.56);part(.29,.08,.10,0x932a37,side*1.29,.93,4.54);
   let wiper=part(.038,.045,.96,0x20262a,side*.54,2.25,-2.38);wiper.rotation.set(-.48,side*.46,0);
  }
  // Wide black lower intake, narrow chrome upper grille, integrated license plate.
- part(2.35,.34,.12,0x20262b,0,1.15,-4.71);for(let i=0;i<4;i++)part(2.22,.035,.13,0x66747e,0,1.03+i*.078,-4.77);
- part(1.12,.09,.085,0xa4b2b8,0,1.47,-4.70);part(.19,.11,.09,0x99a8b0,0,1.61,-4.57);
+ part(2.55,.39,.12,0x20262b,0,1.20,-4.71);for(let i=0;i<5;i++)part(2.36,.022,.13,0x737f85,0,1.045+i*.073,-4.77);for(let j=0;j<13;j++)part(.025,.31,.065,0x3a4247,(j-6)*.17,1.20,-4.79);
+ part(1.28,.055,.085,0xa4b2b8,0,1.47,-4.72);part(.21,.10,.09,0x99a8b0,0,1.59,-4.68);part(2.52,.06,.07,0x9fa7ab,0,1.83,4.721);part(.21,.11,.055,0x9ba4aa,0,1.98,4.70);
  part(2.68,.12,.12,0x252c30,0,.85,-4.58);part(2.62,.13,.12,0x252c30,0,.86,4.60);for(let side of [-1,1]){part(.31,.14,.32,0x89949b,side*1.16,.65,4.55);part(.23,.09,.025,0x23282b,side*1.16,.65,4.725);part(.30,.055,.07,0xaab5bb,side*1.36,1.13,-4.64);part(.035,.06,.85,0x9b9f9f,side*2.115,1.98,-.6);}
  part(.84,.21,.07,0xe9e9df,0,1.04,4.72);part(.84,.21,.07,0xe9e9df,0,.95,-4.79);
  const plateCanvas=document.createElement('canvas');plateCanvas.width=256;plateCanvas.height=64;let pc=plateCanvas.getContext('2d');pc.fillStyle='#edece3';pc.fillRect(0,0,256,64);pc.fillStyle='#263649';pc.fillRect(0,0,21,64);pc.fillStyle='#23272c';pc.font='bold 38px Arial';pc.textAlign='center';pc.fillText('TX 528 16',138,46);let plateMat=new T.MeshBasicMaterial({map:new T.CanvasTexture(plateCanvas)});for(let side of [-1,1]){let p=new T.Mesh(new T.PlaneGeometry(.81,.19),plateMat);p.rotation.y=side<0?Math.PI:0;p.position.set(0,side<0?.95:1.04,side<0?-4.836:4.766);ext.add(p);}
@@ -781,7 +781,7 @@ function updateInstruments(now){
 }
 const taxiCabinShell=new T.Group();interior.add(taxiCabinShell);
 roundedCabin(taxiCabinShell,3.94,.16,6.9,.06,0x30363a,0,1.13,.03,'fabric');
-roundedCabin(taxiCabinShell,2.87,.13,2.56,.06,0xc6c3bb,0,3.50,.18,'fabric');
+roundedCabin(taxiCabinShell,2.92,.13,3.04,.06,0xc6c3bb,0,3.48,.50,'fabric');
 roundedCabin(taxiCabinShell,3.86,.55,1.25,.20,0x272a2c,0,2.00,-1.98,'leather');
 roundedCabin(taxiCabinShell,3.80,.27,.68,.12,0x353638,0,2.22,-1.56,'leather');
 roundedCabin(taxiCabinShell,3.79,.12,.31,.05,0x857362,0,1.99,-1.15,'wood');roundedCabin(taxiCabinShell,3.70,.035,.09,.016,0xb9afa0,0,2.065,-1.035,'metal');
@@ -793,7 +793,7 @@ for(let side of [-1,1]){
  roundedCabin(taxiCabinShell,.09,.22,.68,.035,0x26272a,side*1.74,2.04,-.58);roundedCabin(taxiCabinShell,.11,.10,.43,.045,0xb0b4b6,side*1.675,2.07,-.58,'metal');for(let i=0;i<4;i++)roundedCabin(taxiCabinShell,.12,.035,.12,.015,0x262a2d,side*1.70,2.012,.02+i*.14);
  roundedCabin(taxiCabinShell,.10,.34,1.23,.04,0x222b32,side*1.77,1.45,.80);
  for(let j=0;j<4;j++)cabinTrim(taxiCabinShell,.028,.021,.80,0x6b7479,side*1.708,1.34+j*.068,.80);
- for(let zz of [.55,2.42]){cabinSeat(taxiCabinShell,side*.94,zz,1.47,1.36,zz<1&&side<0);cabinTrim(taxiCabinShell,.12,.19,.17,0x303337,side*.27,1.54,zz+.19);cabinTrim(taxiCabinShell,.12,.05,.15,0xb83032,side*.27,1.66,zz+.19);}
+ for(let zz of [.55,1.93]){cabinSeat(taxiCabinShell,side*.94,zz,zz<1?1.47:1.30,1.36,zz<1&&side<0);cabinTrim(taxiCabinShell,.12,.19,.17,0x303337,side*.27,1.54,zz+.19);cabinTrim(taxiCabinShell,.12,.05,.15,0xb83032,side*.27,1.66,zz+.19);}
  let pillar=roundedCabin(taxiCabinShell,.14,1.62,.17,.06,0x303438,side*1.60,2.73,-1.64);pillar.rotation.x=.65;
  let b=roundedCabin(taxiCabinShell,.17,1.32,.20,.06,0x343a40,side*1.59,2.78,1.17);b.rotation.z=-side*.12;
  let belt=box(.075,1.2,.035,0x25292b,side*1.52,2.66,1.14,taxiCabinShell);belt.rotation.z=side*.15;
@@ -814,17 +814,31 @@ roundedCabin(taxiCabinShell,1.40,.38,.54,.16,0x222426,-.96,2.41,-1.46,'leather')
 // Transparent individual panes, thin seals around their borders, no opaque cabin overlay.
 const clearCabinGlass=new T.MeshBasicMaterial({color:0xd9edf3,transparent:true,opacity:.026,depthWrite:false,side:T.DoubleSide,toneMapped:false});
 const windowSealMaterial=M(0x30383c),windowEdgeMaterial=new T.MeshBasicMaterial({color:0xaac3ce,transparent:true,opacity:.22,depthWrite:false});
-function cabinWindow(points){
- let geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(points.flat(),3));geo.setIndex([0,1,2,0,2,3]);geo.computeVertexNormals();let m=new T.Mesh(geo,clearCabinGlass);m.renderOrder=2;taxiCabinShell.add(m);
- for(let i=0;i<4;i++){let a=new T.Vector3(...points[i]),b=new T.Vector3(...points[(i+1)%4]),d=b.clone().sub(a);let seal=new T.Mesh(new T.CylinderGeometry(.026,.026,d.length(),6),windowSealMaterial);seal.position.copy(a).lerp(b,.5);seal.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),d.normalize());taxiCabinShell.add(seal);}
- let edge=new T.BufferGeometry().setFromPoints(points.map(p=>new T.Vector3(...p)));let outline=new T.LineLoop(edge,windowEdgeMaterial);outline.renderOrder=3;taxiCabinShell.add(outline);
+function cabinWindow(points,parent=taxiCabinShell){
+ let geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(points.flat(),3));geo.setIndex([0,1,2,0,2,3]);geo.computeVertexNormals();let m=new T.Mesh(geo,clearCabinGlass);m.renderOrder=2;parent.add(m);
+ for(let i=0;i<4;i++){let a=new T.Vector3(...points[i]),b=new T.Vector3(...points[(i+1)%4]),d=b.clone().sub(a);let seal=new T.Mesh(new T.CylinderGeometry(.026,.026,d.length(),6),windowSealMaterial);seal.position.copy(a).lerp(b,.5);seal.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),d.normalize());parent.add(seal);}
+ let edge=new T.BufferGeometry().setFromPoints(points.map(p=>new T.Vector3(...p)));let outline=new T.LineLoop(edge,windowEdgeMaterial);outline.renderOrder=3;parent.add(outline);
 }
 cabinWindow([[-1.75,2.06,-2.53],[1.75,2.06,-2.53],[1.36,3.43,-.96],[-1.36,3.43,-.96]]);
 for(let side of [-1,1]){
  cabinWindow([[side*1.76,2.10,-2.48],[side*1.79,2.10,.97],[side*1.40,3.42,.97],[side*1.39,3.42,-.94]]);
- cabinWindow([[side*1.79,2.10,1.11],[side*1.73,2.10,2.49],[side*1.40,3.42,1.34],[side*1.40,3.42,1.11]]);
+ cabinWindow([[side*1.79,2.10,1.11],[side*1.77,2.12,2.20],[side*1.40,3.42,1.96],[side*1.40,3.42,1.11]]);
 }
-cabinWindow([[-1.73,2.10,2.49],[1.73,2.10,2.49],[1.40,3.42,1.34],[-1.40,3.42,1.34]]);
+// Full rear enclosure in first-person: the exterior is intentionally hidden, so the inner shell must close all opaque gaps.
+const taxiRearEnclosure=new T.Group();taxiCabinShell.add(taxiRearEnclosure);
+function rearPanel(points,color,kind='leather'){let geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(points.flat(),3));geo.setIndex([0,1,2,0,2,3]);geo.computeVertexNormals();let mat=cabinMaterial(color,kind).clone();mat.side=T.DoubleSide;let m=new T.Mesh(geo,mat);taxiRearEnclosure.add(m);}
+roundedCabin(taxiRearEnclosure,3.58,.98,.24,.085,0x373331,0,1.62,3.29,'leather');
+roundedCabin(taxiRearEnclosure,3.50,.14,1.04,.06,0x343331,0,2.095,2.89,'fabric');
+roundedCabin(taxiRearEnclosure,3.53,.14,.37,.05,0x3a3835,0,2.17,3.27,'leather');
+for(let side of [-1,1]){
+ rearPanel([[side*1.80,1.14,2.08],[side*1.80,1.14,3.40],[side*1.78,2.14,3.39],[side*1.83,2.14,2.08]],0x36312e);
+ rearPanel([[side*1.78,2.10,2.15],[side*1.78,2.13,3.43],[side*1.40,3.42,2.04],[side*1.40,3.42,1.85]],0x56514a,'fabric');
+ roundedCabin(taxiRearEnclosure,.22,.20,.80,.07,0x413a35,side*1.67,2.15,2.87,'leather');
+}
+rearPanel([[-1.45,3.40,1.85],[1.45,3.40,1.85],[1.38,3.44,2.09],[-1.38,3.44,2.09]],0xb8b5ac,'fabric');
+cabinWindow([[-1.76,2.15,3.40],[1.76,2.15,3.40],[1.39,3.41,2.05],[-1.39,3.41,2.05]],taxiRearEnclosure);
+for(let j=1;j<=7;j++){let t=j/8,w=T.MathUtils.lerp(1.76,1.39,t),yy=T.MathUtils.lerp(2.15,3.41,t),zz=T.MathUtils.lerp(3.40,2.05,t)-.011;let geo=new T.BufferGeometry().setFromPoints([new T.Vector3(-w,yy,zz),new T.Vector3(w,yy,zz)]);taxiRearEnclosure.add(new T.Line(geo,new T.LineBasicMaterial({color:0x89796b,transparent:true,opacity:.28})));}
+
 const dashCanvas=document.createElement('canvas');dashCanvas.width=1200;dashCanvas.height=720;const dashWork=document.createElement('canvas');dashWork.width=dashCanvas.width;dashWork.height=dashCanvas.height;const dc=dashWork.getContext('2d',{alpha:false}),dashOutput=dashCanvas.getContext('2d',{alpha:false}),dashTexture=new T.CanvasTexture(dashCanvas);dashTexture.colorSpace=T.SRGBColorSpace;dashTexture.generateMipmaps=false;dashTexture.minFilter=T.LinearFilter;dashTexture.magFilter=T.LinearFilter;const dashboardMount=new T.Group();dashboardMount.position.set(.43,2.46,-1.19);dashboardMount.scale.setScalar(.79);dashboardMount.rotation.y=-.28;dashboardMount.rotation.x=-.055;interior.add(dashboardMount);roundedCabin(dashboardMount,1.88,1.17,.19,.075,0x26282a,0,0,-.025);roundedCabin(dashboardMount,1.80,1.105,.06,.025,0x151719,0,0,.067);let dashDisplay=new T.Mesh(new T.PlaneGeometry(1.73,1.04),new T.MeshBasicMaterial({map:dashTexture,toneMapped:false}));dashDisplay.position.set(0,0,.105);dashDisplay.name='Navigation screen';dashboardMount.add(dashDisplay);roundedCabin(dashboardMount,.72,.30,.30,.07,0x292b2c,0,-.62,-.19,'leather');box(.65,.12,.09,dark,0,3.47,-2.02,interior);const wheelMount=new T.Group();wheelMount.position.set(-.96,2.05,-.79);wheelMount.rotation.x=-.12;interior.add(wheelMount);let wheel=new T.Group();wheelMount.add(wheel);let rimWheel=new T.Mesh(new T.TorusGeometry(.365,.071,16,48),cabinMaterial(0x242321,'leather'));wheel.add(rimWheel);for(let i=0;i<24;i++){let a=i*Math.PI/12,stitch=box(.024,.013,.018,0x68717b,Math.cos(a)*.365,Math.sin(a)*.365,.057,wheel);stitch.rotation.z=a+Math.PI/2;}for(let side of [-1,1]){let spoke=box(.26,.075,.055,0x333b45,side*.20,0,0,wheel);spoke.rotation.z=side*.12;box(.13,.06,.025,0x687484,side*.20,.035,.04,wheel);}box(.07,.26,.055,0x333b45,0,-.18,0,wheel);let hub=roundedCabin(wheel,.34,.28,.15,.065,0x292826,0,0,.015,'leather');for(let side of [-1,1])for(let j=0;j<3;j++)roundedCabin(wheel,.038,.035,.018,.008,0x969fa5,side*.20,.03+j*.042,.056);let logo=box(.075,.035,.014,0xb7c5d3,0,0,.053,wheel);let column=box(.17,.17,.39,0x272e37,-.96,2.17,-1.25,interior);let exterior=taxi.children.filter(o=>o!==interior);let indicator=0,headlights=false,headlightMode='AUTO',nightLevel=0;function toggleHeadlights(){headlightMode=headlightMode==='AUTO'?'ON':headlightMode==='ON'?'OFF':'AUTO';}
 const taxiBeams=[];for(let side of [-1,1]){let light=new T.SpotLight(0xfff4dc,0,78,.40,.7,1.6);light.position.set(side*1.18,1.56,-4.65);light.target.position.set(side*1.4,-.6,-39);taxi.add(light,light.target);taxiBeams.push(light);}
 const trafficFront=new T.MeshStandardMaterial({color:0xfff5d8,emissive:0xfff1cd,emissiveIntensity:0}),trafficRear=new T.MeshStandardMaterial({color:0xc62a32,emissive:0xff1825,emissiveIntensity:0}),trafficBrake=new T.MeshStandardMaterial({color:0xe92a38,emissive:0xff1825,emissiveIntensity:3});
@@ -1877,7 +1891,7 @@ function busServiceTick(now,dt){if(!busLine)return;let b=busLine.stops[busStopIn
 }
 
 function clearRiders(){riders.clear();waiting.clear();}
-function boardRiders(){clearRiders();if(!job)return;let seats=[[.96,.55],[-.96,2.55],[.96,2.55],[-.96,4.3],[.96,4.3],[-.96,6.05],[.96,6.05],[.96,7.65]];for(let i=0;i<Math.min(job.count,vehicle.cap);i++){let [a,b]=seats[i];const r=person(riders,a,1.55,b,true,i);r.scale.setScalar(.86);}}
+function boardRiders(){clearRiders();if(!job)return;let seats=[[.96,.55],[-.96,1.93],[.96,1.93],[-.96,4.3],[.96,4.3],[-.96,6.05],[.96,6.05],[.96,7.65]];for(let i=0;i<Math.min(job.count,vehicle.cap);i++){let [a,b]=seats[i];const r=person(riders,a,i===1||i===2?1.38:1.55,b,true,i);r.scale.setScalar(.86);}}
 const bay=new T.Group();scene.add(bay);bay.visible=false;
 const bayMat=new T.MeshBasicMaterial({color:0x75ff75,transparent:true,opacity:.25,depthWrite:false,side:T.DoubleSide});
 let floor=new T.Mesh(new T.PlaneGeometry(6,13),bayMat);floor.rotation.x=-Math.PI/2;floor.position.y=.23;bay.add(floor);
@@ -1922,8 +1936,8 @@ function busFareMultiplier(){return 1+busFleet.indexOf(busVehicle)*.40;}
 function applyTaxiModel(){
  applyTaxiPaint(vehicle.color);let k=vehicle.length;taxiExt.scale.z=k;taxiExt.scale.y=vehicle===fleet[2]?1.12:1;taxi.userData.hitL=4.73*k;taxi.userData.bodyHeight=vehicle===fleet[2]?3.85:3.45;taxi.userData.bodyType=vehicle===fleet[2]?'suv':k>1.3?'limousine':'sedan';
  for(let w of wheelPivots(taxi)){let u=w.userData;if(u.originalZ===undefined)u.originalZ=u.baseZ;u.baseZ=u.originalZ*k;}
- if(taxiUpgradeCabin){taxiUpgradeCabin.clear();}else{taxiUpgradeCabin=new T.Group();interior.add(taxiUpgradeCabin);}for(let i=2;i<vehicle.cap;i++){let row=Math.floor(i/2),px=i%2?.97:-.97,pz=2.55+(row-1)*1.75;box(.76,.20,.75,0x404d59,px,1.32,pz,taxiUpgradeCabin);box(.76,.72,.19,0x404d59,px,1.76,pz+.31,taxiUpgradeCabin);}
- if(k>1.3){box(3.8,.18,4.7*(k-1),0x303b45,0,1.11,3.2,taxiUpgradeCabin);box(3.7,.13,4.5*(k-1),0x424a53,0,3.52,3.1,taxiUpgradeCabin);}
+ if(taxiUpgradeCabin){taxiUpgradeCabin.clear();}else{taxiUpgradeCabin=new T.Group();interior.add(taxiUpgradeCabin);}let rearExtension=3.40*(k-1);taxiRearEnclosure.position.z=rearExtension;for(let i=3;i<vehicle.cap;i++){let row=Math.floor((i-3)/2),px=i%2?-.94:.94,pz=4.3+row*1.75;cabinSeat(taxiUpgradeCabin,px,pz,1.34,.86,false);}
+ if(rearExtension>.01){let mid=2.10+rearExtension/2;roundedCabin(taxiUpgradeCabin,3.8,.16,rearExtension+.18,.05,0x343332,0,1.13,mid,'fabric');roundedCabin(taxiUpgradeCabin,2.88,.13,rearExtension+.18,.05,0xb8b5ac,0,3.48,mid,'fabric');for(let side of [-1,1]){roundedCabin(taxiUpgradeCabin,.20,1.02,rearExtension+.18,.075,0x34302e,side*1.84,1.68,mid,'leather');cabinWindow([[side*1.78,2.13,2.10],[side*1.78,2.13,2.10+rearExtension],[side*1.40,3.42,2.10+rearExtension],[side*1.40,3.42,2.10]],taxiUpgradeCabin);}}
 }
 let taxiUpgradeCabin=null;
 function rebuildBus(){if(busModel){taxi.remove(busModel);busModel.traverse(o=>{if(o.isMesh&&o.geometry)o.geometry.dispose();});busModel=null;}busLights=[];busDoors=[];busSeats=[];busOccupants=[];makePlayerBus();if(busMode){busModel.visible=true;taxi._rollingWheels=wheelPivots(busModel);taxi.userData.hitL=8.52*busVehicle.length;taxi.userData.bodyColor=busVehicle.color;}updateBusSign();}
@@ -2570,7 +2584,7 @@ setInterval(cloudSave,5000);setInterval(()=>{advertiseCityPresence();electCityHo
 (async()=>{try{const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm');sb=createClient('https://pzxupuryrjgbboldfrna.supabase.co','sb_publishable_DfP264XeZ6SIO2zlyLZOVg_HtMk0a_h',{auth:{storage:sessionStorageAdapter,persistSession:true}});sb.auth.onAuthStateChange((event,session)=>{if(session&&event==='TOKEN_REFRESHED')setTimeout(()=>sb.realtime.setAuth(session.access_token),0);});const {data}=await sb.auth.getSession();if(data.session)await joinOnline(data.session);else statusOnline('Log in to see other players');}catch(e){statusOnline('Offline — account unavailable');}})();
 
 
-const liveVersion='2026-11-27-live-160';
+const liveVersion='2026-11-27-live-161';
 function snapshotBus(){return busMode?{mode:true,line:busLine?{number:busLine.number,name:busLine.name,stops:busLine.stops.map(b=>({id:b.id,x:b.p.x,z:b.p.z,dir:b.dir})),legs:busLine.legs.slice(),approach:busLine.approach||0,payout:estimateBusReward(busLine)}:null,index:busStopIndex,seats:busOccupants.map(p=>p.seat),earned:busEarned}:null;}
 function restoreBus(p){if(!p?.mode)return false;toggleBusMode(true);if(!busMode)return false;busEarned=Number.isFinite(p.earned)?Math.max(0,p.earned):0;if(!p.line)return true;let stops=p.line.stops.map(q=>transitStops.find(b=>b.id===q.id&&b.dir===q.dir&&Math.hypot(b.p.x-q.x,b.p.z-q.z)<12)||transitStops.filter(b=>b.dir===q.dir).sort((a,b)=>Math.hypot(a.p.x-q.x,a.p.z-q.z)-Math.hypot(b.p.x-q.x,b.p.z-q.z)).find(b=>Math.hypot(b.p.x-q.x,b.p.z-q.z)<28));if(stops.some(b=>!b)||!Number.isInteger(p.index)||p.index<0||p.index>=stops.length||p.line.legs.length!==stops.length){$('task').textContent=tr('Road changed — choose a new line');return true;}busLine={number:p.line.number,name:p.line.name,stops,legs:p.line.legs,approach:Number.isFinite(p.line.approach)?p.line.approach:0,payout:Number.isFinite(p.line.payout)?Math.max(5000,Math.min(52000,p.line.payout)):undefined};busStopIndex=p.index;for(let i of [...new Set(p.seats||[])]){let seat=busSeats[i];if(!seat)continue;let g=person(busRiderGroup,seat.x,seat.y,seat.z,true,i);g.scale.setScalar(.78);busOccupants.push({g,seat:i});}setBusTarget();updateBusSign();renderBusBoard();return true;}
 function restoreLiveUpdate(){try{let p=JSON.parse(sessionStorage.getItem('taxi-live-resume')||'null');if(!p||p.uid!==onlineUser?.id||Date.now()-p.at>600000)return;const findNode=v=>{if(!v)return -1;let best=-1,d=15;nodes.forEach((n,i)=>{let k=Math.hypot(n.x-v.x,n.z-v.z);if(k<d&&adj[i]?.length){best=i;d=k;}});return best;};if([p.x,p.y,p.z,p.h].every(Number.isFinite)){x=p.x;z=p.z;y=surfaceHeight(x,z,p.y);h=p.h;s=0;keys.clear();yaw=Number.isFinite(p.yaw)?p.yaw:0;taxi.rotation.set(0,h,0);taxi.position.set(x,y+.15,z);pitch=p.pitch??.35;zoom=p.zoom??22;}restoreOnline(p.progress);if(restoreBus(p.bus)){sessionStorage.removeItem('taxi-live-resume');return;}let dest=findNode(p.target);if(p.job){let a=findNode(p.a),b=findNode(p.b);if(a>=0&&b>=0){job={...p.job,a,b};target=job.stage===1?b:a;comfort=p.comfort;rideStart=performance.now()-p.elapsed;rideBudget=p.budget;if(job.stage===1)boardRiders();$('task').textContent=job.stage===1?'Drive to destination':'Pick up passenger';}else{job=null;target=-1;$('task').textContent='Road changed — choose a new ride';}}else target=dest;route();renderBoard();sessionStorage.removeItem('taxi-live-resume');}catch(e){console.warn('Update restore failed',e);}}
