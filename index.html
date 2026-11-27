@@ -240,16 +240,8 @@ function junctionLaneSamples(a,ad,ai,b,bd,bi,id){
  for(let i=0;i<=count;i++){let t=i/count,p=curve.getPointAt(t),d=curve.getTangentAt(t).setY(0).normalize(),normal=new T.Vector3(-d.z,0,d.x),left=T.MathUtils.lerp(A.left,B.left,t),right=T.MathUtils.lerp(A.right,B.right,t);samples.push({p,d,left,right,l:p.clone().addScaledVector(normal,-left),r:p.clone().addScaledVector(normal,right)});}return samples;
 }
 // Keep painted markings off intersection turning paths.
-function junctionGuides(id){
- if(ringSet.has(id))return;let {arms}=junctionShape(id);if(arms.length!==2)return;
- let [a,b]=arms;if(a.e.parking||b.e.parking||a.e.flowDir||b.e.flowDir||a.e.lanes!==b.e.lanes||Math.abs(a.w-b.w)>.5||a.d.dot(b.d)>.1)return;
- let n=a.e.lanes||1,reach=Math.min(a.center.distanceTo(b.center)*.38,mouth(a.e,id)*.8,mouth(b.e,id)*.8);
- for(let k=1-n;k<n;k++){if(k!==0&&(a.e.transitLane||b.e.transitLane)&&Math.abs(k)===n-1)continue;let A=a.center.clone().addScaledVector(a.n,a.w*k/n),B=b.center.clone().addScaledVector(b.n,-b.w*k/n),c=new T.CubicBezierCurve3(A,A.clone().addScaledVector(a.d,-reach),B.clone().addScaledVector(b.d,-reach),B),length=c.getLength();if(length<.5)continue;
- let points=c.getSpacedPoints(Math.max(2,Math.ceil(length/1.5)));if(!points.every(p=>roadFootprint(p.x,p.z,p.y,-.2)))continue;
- let solid=k===0&&(a.e.high||b.e.high),list=dashJunctionGuides.get(id);if(!list)dashJunctionGuides.set(id,list=[]);list.push({points,solid});
- for(let d=0;d<length;d+=solid?1.5:9){let end=Math.min(length,d+(solid?1.5:4.5));if(end-d<.1)continue;let v=[];for(let u of [d,end]){let p=c.getPointAt(u/length),dir=c.getTangentAt(u/length).setY(0).normalize(),normal=new T.Vector3(-dir.z,0,dir.x);for(let side of [-1,1]){let q=p.clone().addScaledVector(normal,side*.1);v.push(q.x,q.y+.25,q.z);}}batchRoad(v,[0,2,1,1,2,3],white);}
- }
-}
+// No painted turning trajectories or dedicated turn-lane shapes inside junctions.
+function junctionGuides(id){dashJunctionGuides.delete(id);}
 function safeSidewalk(v,ix,c){let out=[];for(let k=0;k<ix.length;k+=3){let a=ix[k]*3,b=ix[k+1]*3,d=ix[k+2]*3,ok=true;for(let i=0;i<=2&&ok;i++)for(let j=0;j<=2-i;j++){let u=i/2,w=j/2,t=1-u-w;if(roadFootprint(v[a]*u+v[b]*w+v[d]*t,v[a+2]*u+v[b+2]*w+v[d+2]*t,v[a+1]*u+v[b+1]*w+v[d+1]*t,-.12)){ok=false;break;}}if(ok)out.push(ix[k],ix[k+1],ix[k+2]);}if(out.length)batchRoad(v,out,c);}
 function mergeJunction(id){let es=adj[id];if(es.length!==3)return false;let ds=es.map(e=>(e.a===id?e.q:e.p).clone().sub(nodes[id]).setY(0).normalize());return ds.some((d,i)=>ds.some((q,j)=>j>i&&d.dot(q)>.55));}
 // Sidewalks use a single fixed-width ribbon at each outer road boundary.
@@ -284,12 +276,58 @@ function paintRoadDetails(e){let l=flat(e.p,e.q);if(!Number.isFinite(l)||l<.01||
  for(let side of [-1,1])dashed(t=>side*(widthAt(e,t)/2+bayExtent(e,t,side)-.45),.22,white,true);if(e.parking)return;
  if(e.flowDir){for(let k=1;k<n;k++)dashed(t=>widthAt(e,t)*(.5-k/n),.20,white);}
  else{dashed(()=>0,.25,white,e.high||e.busOnly);for(let k=1;k<n;k++)for(let side of [-1,1]){if(e.transitLane&&k===n-1)continue;dashed(t=>side*widthAt(e,t)*k/(2*n),.20,white);}}
- for(let d of e.flowDir?[e.flowDir]:[1,-1]){let id=d===1?e.b:e.a,available=(b-a)*l;if(available<24||ringSet.has(id)||adj[id].length<3||mergeJunction(id)||e.busOnly||e.lanes<2)continue;let t=d===1?b-12/l:a+12/l;for(let k=0;k<endLanes(e,id);k++){let turns=laneTurn(e,id,k);if(turns.length===1)roadPaintArrow(e,t,d,k,turns[0]);}}if(e.bridge)for(let side of [-1,1])strip(e,side*(e.w/2+walkWidth(e)),.3,0x898f94,.8);
+ if(e.bridge)for(let side of [-1,1])strip(e,side*(e.w/2+walkWidth(e)),.3,0x898f94,.8);
 }
 function paintTransitRoads(){for(let b of transitStops){let e=b.e,d=e.q.clone().sub(e.p).setY(0).normalize(),n=new T.Vector3(-d.z,0,d.x),v=[],ix=[],edgeV=[],edgeI=[];for(let i=0;i<=88;i++){let t=b.t+(i-44)/b.length,w=widthAt(e,t)/2,p=e.p.clone().lerp(e.q,t),outer=w+bayExtent(e,t,b.dir);for(let off of [w,outer]){let q=p.clone().addScaledVector(n,b.dir*off);v.push(q.x,q.y+.174,q.z);}for(let off of [outer-.25,outer-.08]){let q=p.clone().addScaledVector(n,b.dir*off);edgeV.push(q.x,q.y+.235,q.z);}if(i){let j=i*2;ix.push(j-2,j,j-1,j-1,j,j+1);edgeI.push(j-2,j,j-1,j-1,j,j+1);}}batchRoad(v,ix,asphalt);}
  for(let e of [...transitEdges,eastBusLink]){let l=flat(e.p,e.q),a=mouth(e,e.a)/l,b=1-mouth(e,e.b)/l;if(e.busOnly){strip(e,0,e.w-.6,0x98504c,.184,a,b);continue;}for(let dir of [-1,1]){strip(e,dir*(e.w/2-LANE_WIDTH/2),LANE_WIDTH-.5,0x98504c,.184,a,b);strip(e,dir*(e.w/2-LANE_WIDTH),.3,0xf6d24a,.24,a,b);}}flushRoads();}
 paintTransitRoads();
-function startRoadDetails(){let jobs=[...edges.map(e=>({p:e.p,run:()=>{buildSidewalk(e);paintRoadDetails(e);}})),...nodes.map((p,i)=>({p,run:()=>{if(adj[i].length>=2&&!ringSet.has(i)){curbCorners(i);junctionGuides(i);}}}))];jobs.sort((a,b)=>Math.hypot(a.p.x-x,a.p.z-z)-Math.hypot(b.p.x-x,b.p.z-z));let i=0;function step(){let start=performance.now();do{try{jobs[i++].run();}catch(e){console.warn('Road detail failed',i,e);}}while(i<jobs.length&&performance.now()-start<7);flushRoads();if(i<jobs.length)requestAnimationFrame(step);else console.info('Road details complete',jobs.length);}if(jobs.length)requestAnimationFrame(step);}
+// Trace the same approach backwards through simple continuations, without crossing another junction.
+function approachMarkAt(edge,dir,meters,graph=adj){
+ let e=edge,d=dir,left=meters,visited=new Set();
+ while(e&&!visited.has(e)){visited.add(e);let len=flat(e.p,e.q),from=d===1?e.a:e.b,to=d===1?e.b:e.a;
+ if(left<=len){let t=d===1?1-left/len:left/len,lo=mouth(e,e.a)/len,hi=1-mouth(e,e.b)/len;
+ if(t>=lo+4/len&&t<=hi-4/len)return {e,dir:d,t};return null;}
+ left-=len;if(graph[from].length!==2||ringSet.has(from))return null;
+ let k=graph[from].find(v=>v!==e);if(!k||k.dirt||k.parking||k.oneWay||k.lanes!==e.lanes||!!k.busOnly!==!!e.busOnly||!!k.transitLane!==!!e.transitLane)return null;
+ let kd=k.b===from?1:-1;if(k.flowDir&&k.flowDir!==kd)return null;
+ let a=e.q.clone().sub(e.p).setY(0).normalize().multiplyScalar(d),b=k.q.clone().sub(k.p).setY(0).normalize().multiplyScalar(kd);if(a.dot(b)<.80)return null;e=k;d=kd;
+ }return null;
+}
+function approachTurns(e,d,id,k){return [...new Set(laneMoves(e,d,id,k).filter(m=>!m.e.busOnly||e.busOnly||e.transitLane&&k===0).map(m=>m.turn))];}
+const paintedAdvanceArrows=new Set(),gantrySites=[];
+function signedDestination(move,id){
+ let e=move.e,dir=move.dir,seen=new Set([e]),far=dir===1?e.q:e.p,at=dir===1?e.b:e.a,initial=nodes[id],v=far.clone().sub(initial).setY(0).normalize();
+ // Follow the outgoing road through intermediate geometry nodes to choose a real district.
+ for(let i=0;i<5&&adj[at].length===2;i++){let k=adj[at].find(q=>!seen.has(q)&&!q.dirt&&!q.parking);if(!k)break;seen.add(k);let next=k.a===at?k.b:k.a,p=nodes[next],delta=p.clone().sub(far).setY(0).normalize();if(delta.dot(v)<.3)break;far=p;at=next;}
+ let candidates=labels.filter(([name,xx,zz])=>name!=='Spawn Parking'&&((xx-initial.x)*v.x+(zz-initial.z)*v.z)>25);
+ if(!candidates.length)candidates=labels.filter(([name])=>name!=='Spawn Parking');
+ return candidates.slice().sort((a,b)=>Math.hypot(a[1]-far.x,a[2]-far.z)-Math.hypot(b[1]-far.x,b[2]-far.z))[0]?.[0]||'City';
+}
+function overheadGuide(at,approach,d,id,meters){
+ let e=at.e,t=at.t,center=e.p.clone().lerp(e.q,t),v=e.q.clone().sub(e.p).setY(0).normalize().multiplyScalar(at.dir),n=new T.Vector3(-v.z,0,v.x);
+ if(gantrySites.some(p=>Math.hypot(p.x-center.x,p.z-center.z)<22))return;
+ let moves=laneMoves(approach,d,id,0).concat(laneMoves(approach,d,id,Math.max(0,approach.lanes-1))).filter(m=>!m.e.busOnly),unique=[];for(let m of moves)if(!unique.some(q=>q.e===m.e))unique.push(m);
+ if(!unique.length)return;gantrySites.push(center.clone());
+ let g=new T.Group();g.position.copy(center);g.rotation.y=Math.atan2(-v.x,-v.z);scene.add(g);
+ let half=widthAt(e,t)/2+3.5,top=12.3,steel=0x87939e;
+ for(let side of [-1,1]){let p=center.clone().addScaledVector(n,side*half),base=ground(p.x,p.z)-center.y;box(1.7,.55,1.7,0x94999b,side*half,base+.275,0,g);box(.62,top-base,.72,steel,side*half,(top+base)/2,0,g);}
+ box(half*2+1,.65,.72,steel,0,top,0,g);box(half*2+1,.3,.34,0xa3adb5,0,top+1.1,0,g);
+ let roadLanes=e.lanes||1,lw=widthAt(e,t)/(2*roadLanes),panelW=Math.min(lw-.7,9.8),panelH=4.7;
+ for(let k=0;k<roadLanes;k++){let legal=laneMoves(approach,d,id,k).filter(m=>!m.e.busOnly);if(!legal.length)continue;legal.sort((a,b)=>Math.abs(a.turn)-Math.abs(b.turn));let m=legal[0],other=legal.find(q=>q.turn!==m.turn),dest=signedDestination(m,id),he=({Downtown:'מרכז העיר','East City':'העיר המזרחית','Luxury Hills':'שכונת היוקרה',Farmland:'אזור חקלאי','Pine Forest':'יער האורנים','Country Village':'כפר',Harbour:'הנמל','Coast Road':'דרך החוף','West Desert Village':'כפר מדברי מערב','Far West Village':'הכפר המערבי','East Desert Village':'כפר מדברי מזרח',Oasis:'נווה מדבר','Desert Market':'שוק המדבר','Snowpeak Ski Resort':'אתר הסקי','Obsidian City':'עיר אובסידיאן','Ember Village':'כפר אמבר','Basalt Heights':'רמת בזלת','Green Terrace':'טרסה ירוקה'})[dest]||'';
+ let cv=document.createElement('canvas');cv.width=512;cv.height=256;let c=cv.getContext('2d');c.fillStyle=m.turn===0?'#07528b':'#176b47';c.fillRect(0,0,512,256);c.strokeStyle='#f5f8f7';c.lineWidth=5;c.strokeRect(9,9,494,238);c.fillStyle='#fff';c.textAlign='center';c.font='bold 30px Arial';c.fillText(he||dest,256,45,462);c.font='bold 27px Arial';c.fillText(dest,256,82,460);
+ c.font='bold 25px Arial';c.fillText((m.turn===0?'JUNCTION':'TURN')+' · '+meters+' m',256,128,460);
+ c.font='bold 86px Arial';c.fillText(({0:'↑',1:'↗','-1':'↖'})[m.turn]+(other?' '+({0:'↑',1:'↗','-1':'↖'})[other.turn]:''),256,224,420);
+ let tex=new T.CanvasTexture(cv);tex.colorSpace=T.SRGBColorSpace;let panel=new T.Mesh(new T.PlaneGeometry(panelW,panelH),new T.MeshBasicMaterial({map:tex,side:T.FrontSide}));let off=laneOffset(e,k,t);box(panelW+.16,panelH+.12,.22,0x4b555c,off,top-panelH/2,.0,g);panel.position.set(off,top-panelH/2,.13);g.add(panel);
+ }
+}
+function paintAdvanceGuidance(id){
+ if(ringSet.has(id))return;let roads=adj[id].filter(e=>!e.dirt&&!e.parking&&!e.oneWay);if(roads.length<3)return;
+ for(let e of roads){let dir=e.b===id?1:-1;if(e.flowDir&&e.flowDir!==dir)continue;let turns=Array.from({length:e.lanes||1},(_,k)=>approachTurns(e,dir,id,k));if(!turns.some(a=>a.some(t=>t!==0)))continue;
+ for(let meters of [200,100,50]){let at=approachMarkAt(e,dir,meters);if(!at)continue;let key=edges.indexOf(at.e)+':'+at.dir+':'+Math.round(at.t*flat(at.e.p,at.e.q));if(paintedAdvanceArrows.has(key))continue;paintedAdvanceArrows.add(key);for(let k=0;k<turns.length;k++)if(turns[k].length)roadPaintArrow(at.e,at.t,at.dir,k,turns[k]);}
+ if(e.high||e.lanes>=2&&roads.some(q=>q.high)){let placed=0;for(let meters of [500,200,100]){let at=approachMarkAt(e,dir,meters);if(at&&at.e.high){overheadGuide(at,e,dir,id,meters);placed++;if(placed>=2)break;}}if(!placed){let at=approachMarkAt(e,dir,50);if(at&&at.e.high)overheadGuide(at,e,dir,id,50);}}
+ }
+}
+function startRoadDetails(){let jobs=[...edges.map(e=>({p:e.p,run:()=>{buildSidewalk(e);paintRoadDetails(e);}})),...nodes.map((p,i)=>({p,run:()=>{if(adj[i].length>=2&&!ringSet.has(i)){curbCorners(i);junctionGuides(i);paintAdvanceGuidance(i);}}}))];jobs.sort((a,b)=>Math.hypot(a.p.x-x,a.p.z-z)-Math.hypot(b.p.x-x,b.p.z-z));let i=0;function step(){let start=performance.now();do{try{jobs[i++].run();}catch(e){console.warn('Road detail failed',i,e);}}while(i<jobs.length&&performance.now()-start<7);flushRoads();if(i<jobs.length)requestAnimationFrame(step);else console.info('Road details complete',jobs.length);}if(jobs.length)requestAnimationFrame(step);}
 flushRoads();
 // Single counterclockwise circulating lane with a continuous annular surface.
 function ringSurface(inner,outer,y,c){let g=new T.RingGeometry(inner,outer,192);g.rotateX(-Math.PI/2);let material=M(c);if(c===0x42474d||c===0xe4e0d5){let p=g.attributes.position,uv=[];for(let i=0;i<p.count;i++)uv.push((p.getX(i)+40)/8,(p.getZ(i)+40)/8);g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));material=roadTextureMaterial(c,c===0x42474d?asphaltGrain:walkGrain);}let m=new T.Mesh(g,material);m.position.set(40,y,40);scene.add(m);}
@@ -1508,7 +1546,7 @@ setInterval(cloudSave,5000);setInterval(()=>{advertiseCityPresence();electCityHo
 (async()=>{try{const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm');sb=createClient('https://pzxupuryrjgbboldfrna.supabase.co','sb_publishable_DfP264XeZ6SIO2zlyLZOVg_HtMk0a_h',{auth:{storage:sessionStorageAdapter,persistSession:true}});sb.auth.onAuthStateChange((event,session)=>{if(session&&event==='TOKEN_REFRESHED')setTimeout(()=>sb.realtime.setAuth(session.access_token),0);});const {data}=await sb.auth.getSession();if(data.session)await joinOnline(data.session);else statusOnline('Log in to see other players');}catch(e){statusOnline('Offline — account unavailable');}})();
 
 
-const liveVersion='2026-11-27-live-105';
+const liveVersion='2026-11-27-live-106';
 function snapshotBus(){return busMode?{mode:true,line:busLine?{number:busLine.number,name:busLine.name,stops:busLine.stops.map(b=>({id:b.id,x:b.p.x,z:b.p.z,dir:b.dir})),legs:busLine.legs.slice(),approach:busLine.approach||0,payout:estimateBusReward(busLine)}:null,index:busStopIndex,seats:busOccupants.map(p=>p.seat),earned:busEarned}:null;}
 function restoreBus(p){if(!p?.mode)return false;toggleBusMode(true);if(!busMode)return false;busEarned=Number.isFinite(p.earned)?Math.max(0,p.earned):0;if(!p.line)return true;let stops=p.line.stops.map(q=>transitStops.find(b=>b.id===q.id&&b.dir===q.dir&&Math.hypot(b.p.x-q.x,b.p.z-q.z)<12)||transitStops.filter(b=>b.dir===q.dir).sort((a,b)=>Math.hypot(a.p.x-q.x,a.p.z-q.z)-Math.hypot(b.p.x-q.x,b.p.z-q.z)).find(b=>Math.hypot(b.p.x-q.x,b.p.z-q.z)<28));if(stops.some(b=>!b)||!Number.isInteger(p.index)||p.index<0||p.index>=stops.length||p.line.legs.length!==stops.length){$('task').textContent=tr('Road changed — choose a new line');return true;}busLine={number:p.line.number,name:p.line.name,stops,legs:p.line.legs,approach:Number.isFinite(p.line.approach)?p.line.approach:0,payout:Number.isFinite(p.line.payout)?Math.max(5000,Math.min(20000,p.line.payout)):undefined};busStopIndex=p.index;for(let i of [...new Set(p.seats||[])]){let seat=busSeats[i];if(!seat)continue;let g=person(busRiderGroup,seat.x,seat.y,seat.z,true,i);g.scale.setScalar(.78);busOccupants.push({g,seat:i});}setBusTarget();updateBusSign();renderBusBoard();return true;}
 function restoreLiveUpdate(){try{let p=JSON.parse(sessionStorage.getItem('taxi-live-resume')||'null');if(!p||p.uid!==onlineUser?.id||Date.now()-p.at>600000)return;const findNode=v=>{if(!v)return -1;let best=-1,d=15;nodes.forEach((n,i)=>{let k=Math.hypot(n.x-v.x,n.z-v.z);if(k<d&&adj[i]?.length){best=i;d=k;}});return best;};if([p.x,p.y,p.z,p.h].every(Number.isFinite)){x=p.x;z=p.z;y=surfaceHeight(x,z,p.y);h=p.h;s=0;keys.clear();yaw=Number.isFinite(p.yaw)?p.yaw:0;taxi.rotation.set(0,h,0);taxi.position.set(x,y+.15,z);pitch=p.pitch??.35;zoom=p.zoom??22;}restoreOnline(p.progress);if(restoreBus(p.bus)){sessionStorage.removeItem('taxi-live-resume');return;}let dest=findNode(p.target);if(p.job){let a=findNode(p.a),b=findNode(p.b);if(a>=0&&b>=0){job={...p.job,a,b};target=job.stage===1?b:a;comfort=p.comfort;rideStart=performance.now()-p.elapsed;rideBudget=p.budget;if(job.stage===1)boardRiders();$('task').textContent=job.stage===1?'Drive to destination':'Pick up passenger';}else{job=null;target=-1;$('task').textContent='Road changed — choose a new ride';}}else target=dest;route();renderBoard();sessionStorage.removeItem('taxi-live-resume');}catch(e){console.warn('Update restore failed',e);}}
