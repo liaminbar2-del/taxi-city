@@ -1218,7 +1218,7 @@ function shouldReplan(now){
 }
 // Read existing terrain vertices rather than repeating road grading in the navigation renderer.
 function dashGround(xx,zz){return skiMeshHeight(xx,zz);}
-let dashQualityStep=16,dashCost=0,dashErrors=0,dashResolutionAt=-Infinity,dashLastGood=-Infinity,dashRetryAt=0,dashLastAttempt=-Infinity,dashForce=true,dashWasVisible=false,dashHudLane=null,dashHudSignal=null,dashHudAt=-Infinity,dashFrameBudget=18,dashLiteUntil=0;
+let dashQualityStep=16,dashCost=0,dashErrors=0,dashResolutionAt=-Infinity,dashLastGood=-Infinity,dashRetryAt=0,dashLastAttempt=-Infinity,dashForce=true,dashWasVisible=false,dashHudLane=null,dashHudSignal=null,dashHudAt=-Infinity,dashLiteUntil=0;
 // Spatial indexes retain the exact same artwork and geometry, but visit only nearby objects.
 const dashSpatialCache=new WeakMap();
 function dashSpatial(list,radius,bounds){
@@ -1255,7 +1255,6 @@ function updateDashboard(now,urgent=false){
  if(now-dashLastAttempt<90)return;dashLastAttempt=lastDash=now;const started=performance.now();
  // The GPU texture remains a fixed size for its entire life. Only the private work canvas changes resolution.
  if(now-dashResolutionAt>2500){let width=dashErrors||perfFrameAverage>36||dashCost>25?800:perfFrameAverage>26||dashCost>15?1040:1280;if(dashWork.width!==width){dashWork.width=width;dashWork.height=Math.round(width*.60);}dashResolutionAt=now;}
- dashFrameBudget=perfFrameAverage>32?10:perfFrameAverage>23?14:20;
  let detailed=!dashErrors&&now>=dashLiteUntil||now>=dashRetryAt&&dashErrors>0,ok=false;
  resetDashWork();dc.save();try{dc.globalAlpha=1;dc.globalCompositeOperation='source-over';dc.shadowBlur=0;if(detailed)drawDashboardFrame(now);else drawDashFallback(now);ok=true;if(detailed){dashErrors=0;dashRetryAt=0;}}
  catch(err){if(++dashErrors===1)console.warn('Dashboard detail recovery',err);dashRetryAt=now+Math.min(3000,250*dashErrors);dashLiteUntil=now+500;}
@@ -1285,7 +1284,7 @@ function drawDashboardFrame(now){dc.setTransform(dashWork.width/800,0,0,dashWork
  function polygon(points,fill,stroke){if(points.length<3)return;let clipped=[];for(let i=0;i<points.length;i++){let a=points[i],b=points[(i+1)%points.length],da=depthOf(a),db=depthOf(b);if(da>=12)clipped.push(a);if((da>=12)!==(db>=12)){let t=(12-da)/(db-da);clipped.push({u:a.u+(b.u-a.u)*t,v:a.v+(b.v-a.v)*t,height:a.height+(b.height-a.height)*t});}}if(clipped.length<3)return;let p=clipped.map(proj);if(p.every(q=>q[0]<-3)||p.every(q=>q[0]>619)||p.every(q=>q[1]<-3)||p.every(q=>q[1]>441))return;c.beginPath();p.forEach((q,i)=>{i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]);});c.closePath();c.fillStyle=fill;c.fill();if(stroke){c.strokeStyle=stroke;c.lineWidth=.8;c.stroke();}}
  function ribbon(a,b,width,color){let dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz);if(len<.01)return;let n=Math.max(1,Math.ceil(len/(dashQualityStep>=22?14:9))),nx=-dz/len*width/2,nz=dx/len*width/2;for(let i=0;i<n;i++){let t=i/n,u=(i+1)/n,A={x:a.x+dx*t,z:a.z+dz*t},B={x:a.x+dx*u,z:a.z+dz*u};let ay=Number.isFinite(a.y)&&Number.isFinite(b.y)?T.MathUtils.lerp(a.y,b.y,t):null,by=Number.isFinite(a.y)&&Number.isFinite(b.y)?T.MathUtils.lerp(a.y,b.y,u):null;let P=[local(A.x+nx,A.z+nz,.16,ay),local(B.x+nx,B.z+nz,.16,by),local(B.x-nx,B.z-nz,.16,by),local(A.x-nx,A.z-nz,.16,ay)];if(P.every(p=>p.v< -19||p.v>150||Math.abs(p.u)>130))continue;polygon(P,color);}}
  let bg=c.createLinearGradient(0,48,0,442);bg.addColorStop(0,palette.panel);bg.addColorStop(.45,palette.bg);bg.addColorStop(1,palette.bg);c.fillStyle=bg;c.fillRect(0,0,W,H);c.save();c.beginPath();c.rect(0,0,616,438);c.clip();
- const detailStart=performance.now();let terrainSample=[],gridStep=dashQualityStep;for(let v=240;v>=-48;v-=gridStep){let row=[];for(let u=-168;u<=168;u+=gridStep){let xx=x+u*rx+v*fx,zz=z+u*rz+v*fz,yy=dashGround(xx,zz);row.push({u,v,height:yy-y,elevation:yy,xx,zz});}terrainSample.push(row);}
+ let terrainSample=[],gridStep=dashQualityStep;for(let v=240;v>=-48;v-=gridStep){let row=[];for(let u=-168;u<=168;u+=gridStep){let xx=x+u*rx+v*fx,zz=z+u*rz+v*fz,yy=dashGround(xx,zz);row.push({u,v,height:yy-y,elevation:yy,xx,zz});}terrainSample.push(row);}
  function terrainFace(pts){let cx=pts.reduce((a,p)=>a+p.xx,0)/pts.length;if(inGoldenRiver(cx,0)){polygon(pts.map(p=>({...p,height:Math.max(p.height,-y)})),darkMode?'#4c4c4c':'#9f9f9f');return;}let height=(pts[0].elevation+pts[1].elevation+pts[2].elevation)/3,xx=(pts[0].xx+pts[1].xx+pts[2].xx)/3,zz=(pts[0].zz+pts[1].zz+pts[2].zz)/3;
  let A=pts[0],B=pts[1],C=pts[2],dx=B.xx-A.xx,dz=B.zz-A.zz,ex=C.xx-A.xx,ez=C.zz-A.zz,det=dx*ez-dz*ex,gy=B.elevation-A.elevation,hy=C.elevation-A.elevation;
  let gx=Math.abs(det)>.01?(gy*ez-hy*dz)/det:0,gz=Math.abs(det)>.01?(dx*hy-ex*gy)/det:0,slope=Math.hypot(gx,gz);
