@@ -537,7 +537,7 @@ function steeringRate(speed){let v=Math.abs(speed);return 1.55*Math.min(1,v/8)/(
 function taxiAcceleration(speed,base,grip){let ratio=Math.min(1,Math.abs(speed)/60);return base*grip*(1-.58*Math.pow(ratio,1.35));}
 function wheelLongitudinalStep(speed,gas,brake,reverse,dt,acc,grip,cap){let sign=reverse?-1:1,mag=Math.abs(speed),max=reverse?12:cap;if(brake>.02||gas>.02&&speed*sign<0)return Math.sign(speed)*Math.max(0,mag-(brake>.02?34*Math.pow(brake,1.2):24)*grip*dt);if(gas<.015)return Math.sign(speed)*Math.max(0,mag-(.42+mag*.025)*grip*dt);let thrust=taxiAcceleration(mag,reverse?Math.min(acc,5):acc,grip)*Math.pow(gas,1.12),drag=(.25+mag*.018)*(1-gas);return sign*Math.max(0,Math.min(max,mag+(thrust-drag)*dt));}
 // Bus-only longitudinal and rear-axle steering simulation. Taxi behavior is unchanged.
-function busSteerLimit(speed){let v=Math.abs(speed);return .445/(1+Math.pow(v/22,1.7)*.80);}
+function busSteerLimit(speed){let v=Math.abs(speed);return .505/(1+Math.pow(v/22,1.7)*.90);}
 function busDriveStep(dt){
  const old=s,oldH=h;
  if(busAnimation){s=0;bodyAccel=bodyTurn=0;roadWheelAngle=0;steeringSmooth=0;playerSlideX=playerSlideZ=0;return oldH;}
@@ -550,10 +550,10 @@ function busDriveStep(dt){
  s=sign*Math.min(cap,Math.max(0,mag+(thrust-.21-mag*.008)*dt));}
  else{s=Math.sign(s)*Math.max(0,mag-(.85+mag*.040)*grip*dt);}
  if(Math.abs(s)<.035)s=0;
- const desired=T.MathUtils.clamp(drive.steer,-1,1),rate=Math.abs(desired)<Math.abs(steeringSmooth)?6.0:4.1;
+ const desired=T.MathUtils.clamp(drive.steer,-1,1),rate=Math.abs(desired)<Math.abs(steeringSmooth)?7.0:5.2;
  steeringSmooth=T.MathUtils.lerp(steeringSmooth,desired,1-Math.exp(-dt*rate));
  const target=-steeringSmooth*busSteerLimit(s)*(.82+.18*grip);
- roadWheelAngle=T.MathUtils.lerp(roadWheelAngle,target,1-Math.exp(-dt*8.0));
+ roadWheelAngle=T.MathUtils.lerp(roadWheelAngle,target,1-Math.exp(-dt*9.0));
  bodyTurn=-s*Math.tan(roadWheelAngle)/10.8;
  h-=bodyTurn*dt;bodyAccel=(s-old)/Math.max(.001,dt);return oldH;
 }
@@ -1039,8 +1039,8 @@ for(let side of [-1,1]){for(let [a,b] of (side<0?[[-8.08,8.08]]:[[-6.20,1.02],[3
  box(.45,.17,.065,bright,0,2.05,-8.47,g);
  // Front cockpit: lower dash, distinct steering wheel and live navigation display.
  box(3.92,.38,1.35,0x35434c,0,2.12,-7.53,g);box(1.28,.16,.68,0x202c33,-1.02,2.39,-7.12,g);for(let i=0;i<6;i++)box(.10,.045,.16,0x71838b,-1.47+i*.18,2.485,-7.25,g);box(1.35,.27,.76,0x24343f,-1.02,2.43,-7.08,g);box(.88,.11,.11,0x9eb9bf,-1.02,2.59,-7.18,g);
- let wm=new T.Group();wm.position.set(-1.02,2.65,-6.48);wm.rotation.x=-.28;g.add(wm);let column=box(.21,.22,.59,0x29343c,-1.02,2.48,-6.80,g);column.rotation.x=.32;busSteering=new T.Group();wm.add(busSteering);busSteering.add(new T.Mesh(new T.TorusGeometry(.48,.060,12,40),M(0x20282e)));for(let a of [0,2.094,4.189]){let spoke=box(.075,.33,.06,0x4d5962,Math.sin(a)*.16,Math.cos(a)*.16,0,busSteering);spoke.rotation.z=-a;}let hub=box(.28,.25,.11,0x303b42,0,0,.035,busSteering);
- let mount=new T.Group();mount.position.set(.48,2.89,-6.88);mount.rotation.y=-.30;mount.rotation.x=-.12;g.add(mount);box(1.54,.91,.10,0x111c23,0,0,0,mount);let display=new T.Mesh(new T.PlaneGeometry(1.44,.81),new T.MeshBasicMaterial({map:dashTexture,toneMapped:false}));display.position.z=.063;mount.add(display);box(.26,.24,.30,0x26343c,.48,2.40,-7.02,g);
+ let wm=new T.Group();wm.position.set(-1.02,2.49,-6.35);wm.rotation.x=-.28;g.add(wm);let column=box(.21,.22,.72,0x29343c,-1.02,2.42,-6.72,g);column.rotation.x=.14;busSteering=new T.Group();wm.add(busSteering);busSteering.add(new T.Mesh(new T.TorusGeometry(.48,.060,12,40),M(0x20282e)));for(let a of [0,2.094,4.189]){let spoke=box(.075,.33,.06,0x4d5962,Math.sin(a)*.16,Math.cos(a)*.16,0,busSteering);spoke.rotation.z=-a;}let hub=box(.28,.25,.11,0x303b42,0,0,.035,busSteering);
+ let mount=new T.Group();mount.position.set(.48,2.73,-6.65);mount.rotation.y=-.30;mount.rotation.x=-.12;g.add(mount);box(1.54,.91,.10,0x111c23,0,0,0,mount);let display=new T.Mesh(new T.PlaneGeometry(1.44,.81),new T.MeshBasicMaterial({map:dashTexture,toneMapped:false}));display.position.z=.063;mount.add(display);box(.26,.26,.50,0x26343c,.48,2.33,-6.89,g);
  for(let i=0;i<5;i++)box(.12,.08,.16,i===0?0xe6a439:0x7895a1,.16+i*.24,2.38,-6.85,g);
  function seat(px,pz,driver=false){let lift=!driver&&Math.abs(pz-5.4)<1.25?.50:0,cloth=driver?0x374a59:0x365c83;box(.70,.18,.75,0x2e414c,px,1.38+lift,pz,g);box(.73,.20,.75,cloth,px,1.66+lift,pz,g);box(.73,.83,.19,cloth,px,2.1+lift,pz+.30,g);box(.73,.13,.22,0x496d91,px,2.57+lift,pz+.30,g);box(.48,.52,.035,0x587a95,px,2.13+lift,pz+.19,g);for(let q of [-1,1])box(.10,.20,.57,0x34464f,px+q*.32,1.85+lift,pz,g);if(driver)box(.77,.25,.78,0x46545c,px,1.24,pz,g);}
  seat(-1.02,-5.20,true);box(.14,2.6,.95,0x485e69,-.47,2.6,-4.86,g);
@@ -1475,7 +1475,7 @@ setInterval(cloudSave,5000);setInterval(()=>{advertiseCityPresence();electCityHo
 (async()=>{try{const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm');sb=createClient('https://pzxupuryrjgbboldfrna.supabase.co','sb_publishable_DfP264XeZ6SIO2zlyLZOVg_HtMk0a_h',{auth:{storage:sessionStorageAdapter,persistSession:true}});sb.auth.onAuthStateChange((event,session)=>{if(session&&event==='TOKEN_REFRESHED')setTimeout(()=>sb.realtime.setAuth(session.access_token),0);});const {data}=await sb.auth.getSession();if(data.session)await joinOnline(data.session);else statusOnline('Log in to see other players');}catch(e){statusOnline('Offline — account unavailable');}})();
 
 
-const liveVersion='2026-11-27-live-95';
+const liveVersion='2026-11-27-live-96';
 function snapshotBus(){return busMode?{mode:true,line:busLine?{number:busLine.number,name:busLine.name,stops:busLine.stops.map(b=>({id:b.id,x:b.p.x,z:b.p.z,dir:b.dir})),legs:busLine.legs.slice()}:null,index:busStopIndex,seats:busOccupants.map(p=>p.seat),earned:busEarned}:null;}
 function restoreBus(p){if(!p?.mode)return false;toggleBusMode(true);if(!busMode)return false;busEarned=Number.isFinite(p.earned)?Math.max(0,p.earned):0;if(!p.line)return true;let stops=p.line.stops.map(q=>transitStops.find(b=>b.id===q.id&&b.dir===q.dir&&Math.hypot(b.p.x-q.x,b.p.z-q.z)<12)||transitStops.filter(b=>b.dir===q.dir).sort((a,b)=>Math.hypot(a.p.x-q.x,a.p.z-q.z)-Math.hypot(b.p.x-q.x,b.p.z-q.z)).find(b=>Math.hypot(b.p.x-q.x,b.p.z-q.z)<28));if(stops.some(b=>!b)||!Number.isInteger(p.index)||p.index<0||p.index>=stops.length||p.line.legs.length!==stops.length){$('task').textContent=tr('Road changed — choose a new line');return true;}busLine={number:p.line.number,name:p.line.name,stops,legs:p.line.legs};busStopIndex=p.index;for(let i of [...new Set(p.seats||[])]){let seat=busSeats[i];if(!seat)continue;let g=person(busRiderGroup,seat.x,seat.y,seat.z,true,i);g.scale.setScalar(.78);busOccupants.push({g,seat:i});}setBusTarget();updateBusSign();renderBusBoard();return true;}
 function restoreLiveUpdate(){try{let p=JSON.parse(sessionStorage.getItem('taxi-live-resume')||'null');if(!p||p.uid!==onlineUser?.id||Date.now()-p.at>600000)return;const findNode=v=>{if(!v)return -1;let best=-1,d=15;nodes.forEach((n,i)=>{let k=Math.hypot(n.x-v.x,n.z-v.z);if(k<d&&adj[i]?.length){best=i;d=k;}});return best;};if([p.x,p.y,p.z,p.h].every(Number.isFinite)){x=p.x;z=p.z;y=surfaceHeight(x,z,p.y);h=p.h;s=0;keys.clear();yaw=Number.isFinite(p.yaw)?p.yaw:0;taxi.rotation.set(0,h,0);taxi.position.set(x,y+.15,z);pitch=p.pitch??.35;zoom=p.zoom??22;}restoreOnline(p.progress);if(restoreBus(p.bus)){sessionStorage.removeItem('taxi-live-resume');return;}let dest=findNode(p.target);if(p.job){let a=findNode(p.a),b=findNode(p.b);if(a>=0&&b>=0){job={...p.job,a,b};target=job.stage===1?b:a;comfort=p.comfort;rideStart=performance.now()-p.elapsed;rideBudget=p.budget;if(job.stage===1)boardRiders();$('task').textContent=job.stage===1?'Drive to destination':'Pick up passenger';}else{job=null;target=-1;$('task').textContent='Road changed — choose a new ride';}}else target=dest;route();renderBoard();sessionStorage.removeItem('taxi-live-resume');}catch(e){console.warn('Update restore failed',e);}}
