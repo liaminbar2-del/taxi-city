@@ -1277,7 +1277,17 @@ let count=0;const usedModels=new Set();
 function district(x0,x1,z0,z1,step,families){if(coastalWorldActive)return;let n=0;for(let x=x0;x<x1;x+=step)for(let z=z0;z<z1;z+=step){let ids=modelCatalog.filter(m=>families.includes(m.family)).map(m=>m.id);let id=ids.find(i=>!usedModels.has(i))??ids[n++%ids.length];if(building(x,z,id))usedModels.add(id);}}
 // Entirely new procedural mainland architecture, seeded by geographic location.
 // 800 individual parcels, multiple massing families; shared instanced geometry limits draw calls.
-const metropolisParcels=[],metroParcelGrid=new Map();
+const metropolisParcels=[],metroParcelGrid=new Map(),worldLots=[],urbanGroundPatches=[];
+function lotOccupied(x,z,w,d,margin=3){return worldLots.some(o=>Math.abs(x-o.x)<(w+o.w)/2+margin&&Math.abs(z-o.z)<(d+o.d)/2+margin);}
+function reserveWorldLots(){
+ const candidates=[['plaza',350,170,55,48],['plaza',600,660,48,45],['plaza',70,610,40,42],['park',-130,370,72,50],['park',-350,130,65,55],['park',-850,-20,65,58],['park',-1110,180,60,48],['park',1545,380,40,42],['sport',-80,845,66,48],['sport',-1140,-335,58,44],['parking',435,-760,54,44],['parking',730,395,54,37],['parking',1510,120,46,38],['parking',-1100,-80,54,42],['depot',510,-1030,66,62],['depot',235,-740,58,58],['market',-1335,-320,48,40],['market',-350,-345,42,36],['beach',1650,650,28,48],['beach',1480,830,34,42]];
+ for(let [kind,cx,cz,w,d] of candidates){let best=null,radius=Math.hypot(w,d)/2;
+ for(let r of [0,20,40,60,85,110]){for(let j=0;j<(r?12:1);j++){let x=cx+Math.cos(j*Math.PI/6)*r,z=cz+Math.sin(j*Math.PI/6)*r;
+ if(waterGap(x,z)<radius+7||inParking(x,z,radius+9)||lotOccupied(x,z,w,d,12)||Math.abs(x+495)<112&&z>450&&z<925||edges.some(e=>dist(x,z,e).d<e.w/2+radius+9+(e.busBay||e.taxiBay?10:0)))continue;
+ let h=[ground(x,z),...[-1,1].flatMap(a=>[-1,1].map(b=>ground(x+a*w/2,z+b*d/2)))];if(Math.max(...h)-Math.min(...h)>2.8)continue;
+ let nearest=Math.min(...edges.filter(e=>!e.high&&!e.bridge&&!e.parking).map(e=>dist(x,z,e).d));if(nearest>105)continue;best={kind,x,z,w,d,y:Math.max(...h)+.12};break;}if(best)break;}if(best)worldLots.push(best);}
+}
+reserveWorldLots();
 function metroHash(a,b=0){let n=Math.sin(a*12.9898+b*78.233)*43758.5453;return n-Math.floor(n);}
 function metroZone(x,z){
  if(z< -680&&x< -480)return 'mountain';
@@ -1291,17 +1301,21 @@ function metroZone(x,z){
  return 'suburban';
 }
 function metroParcel(x,z,serial,frontage=true){
- if(x<-2010||x>2010||Math.abs(z)>1620||waterGap(x,z)<36||lavaDistance(x,z)<27||oasisRadius(x,z)<2.2||skiPisteDistance(x,z)<24||!coastalWorldActive&&Math.hypot(x-skiResort.x,z-skiResort.z)<155||ringSet.size&&Math.hypot(x-40,z-40)<78||inParking(x,z,24))return false;
+ if(lotOccupied(x,z,42,42)||x<-2010||x>2010||Math.abs(z)>1620||waterGap(x,z)<36||lavaDistance(x,z)<27||oasisRadius(x,z)<2.2||skiPisteDistance(x,z)<24||!coastalWorldActive&&Math.hypot(x-skiResort.x,z-skiResort.z)<155||ringSet.size&&Math.hypot(x-40,z-40)<78||inParking(x,z,24))return false;
  let zone=metroZone(x,z);if(zone==='wetland'||zone==='mountain'&&metroHash(x,z)<.90||Math.abs(x+495)<112&&z>450&&z<925)return false;let seed=metroHash(x,z),v=metroHash(z,x),style=Math.floor(seed*8),tower=zone==='downtown'&&seed>.56||zone==='coastal'&&seed>.75,hotel=zone==='coastal'&&seed>.42&&!tower,warehouse=zone==='industrial'&&seed>.54,apartment=!tower&&!hotel&&!warehouse&&(zone==='downtown'||zone==='coastal'||seed>.78&&zone==='suburban'),shop=!tower&&!hotel&&!warehouse&&!apartment&&seed>.58&&zone!=='mountain'&&zone!=='luxury',villa=zone==='luxury';
  let w=tower?23+v*11:warehouse?29+v*12:hotel?26+v*12:apartment?19+v*9:villa?22+v*7:12+v*7,d=tower?22+seed*8:warehouse?23+seed*14:hotel?23+seed*9:apartment?17+seed*7:12+seed*7;
- let r=Math.hypot(w,d)/2+2.6,near=new Set([-96,0,96].flatMap(dx=>[-96,0,96].flatMap(dz=>spatialAt(footprintGrid,x+dx,z+dz))));
+ let r=Math.hypot(w,d)/2+4,near=new Set([-96,0,96].flatMap(dx=>[-96,0,96].flatMap(dz=>spatialAt(footprintGrid,x+dx,z+dz))));
+ let facing=0,bestFront=Infinity,frontRoad=null;
+ for(let e of near){if(e.high||e.ramp||e.bridge||e.parking)continue;let dx=e.q.x-e.p.x,dz=e.q.z-e.p.z,t=Math.max(0,Math.min(1,((x-e.p.x)*dx+(z-e.p.z)*dz)/(dx*dx+dz*dz||1))),ax=e.p.x+t*dx-x,az=e.p.z+t*dz-z,score=Math.hypot(ax,az)-e.w/2;if(score<bestFront){bestFront=score;frontRoad=e;facing=Math.abs(ax)>Math.abs(az)?(ax>0?1:3):(az>0?0:2);}}
+ let swapped=facing%2===1,W=swapped?d:w,D=swapped?w:d;
+ const orient=(a,b)=>facing===0?[a,b]:facing===1?[b,-a]:facing===2?[-a,-b]:[-b,a];
  if([...near].some(e=>dist(x,z,e).d<e.w/2+(e.busBay||e.taxiBay?13:e.high?12:6)+r))return false;
- if(spatialAt(metroParcelGrid,x,z).some(o=>Math.abs(x-o.x)<(w+o.w)/2+5&&Math.abs(z-o.z)<(d+o.d)/2+5))return false;
- if(obs.some(o=>Math.abs(x-o.x)<(w+o.w)/2+4&&Math.abs(z-o.z)<(d+o.d)/2+4))return false;
- let hs=[[-1,-1],[-1,1],[1,-1],[1,1],[0,0]].map(([a,b])=>ground(x+a*w/2,z+b*d/2)),low=Math.min(...hs),y=Math.max(...hs)+.1;if(y-low>5.8||y>125)return false;
+ if(spatialAt(metroParcelGrid,x,z).some(o=>Math.abs(x-o.x)<(W+o.w)/2+5&&Math.abs(z-o.z)<(D+o.d)/2+5))return false;
+ if(obs.some(o=>Math.abs(x-o.x)<(W+o.w)/2+4&&Math.abs(z-o.z)<(D+o.d)/2+4))return false;
+ let hs=[[-1,-1],[-1,1],[1,-1],[1,1],[0,0]].map(([a,b])=>ground(x+a*W/2,z+b*D/2)),low=Math.min(...hs),y=Math.max(...hs)+.1;if(y-low>5.8||y>125)return false;
  let h=tower?58+Math.floor(v*24)*3.3:hotel?16+Math.floor(v*8)*3.4:apartment?11+Math.floor(v*6)*3.1:warehouse?7+v*5:villa?7+v*5:shop?6+v*5:4.8+Math.floor(v*2)*3;
  let walls=zone==='desert'?[0xdac4a0,0xc8aa83,0xd4b896]:zone==='volcanic'?[0x575358,0x777076,0x90827b]:tower?[0x9bb6c5,0xb3c4ce,0xd9e0e1]:zone==='coastal'?[0xf0dfd2,0xd7e7df,0xe3d2dd,0xf2e7cf,0xcbdde7]:[0xe7dfd1,0xc8cecb,0xd1b8a3,0xd9d6c9,0xb5c7cf],wall=walls[style%walls.length],glass=[0x507c93,0x58778d,0x7596a5,0x426979][style%4],trim=zone==='volcanic'?0x938c87:0xf0eee6,roof=[0x666d72,0x986c51,0x8b9292,0x536d79][style%4],facade=[];
- function B(bw,bh,bd,c,xx,yy,zz,kind='',record=false){if(bw<=0||bh<=0||bd<=0)return;queueBuildingBox(bw,bh,bd,c,x+xx,y+yy,z+zz,kind);if(record)facade.push([bw,bh,bd,c,xx,yy,zz]);}
+ function B(bw,bh,bd,c,xx,yy,zz,kind='',record=false){if(bw<=0||bh<=0||bd<=0)return;let [ox,oz]=orient(xx,zz),ww=swapped?bd:bw,dd=swapped?bw:bd;queueBuildingBox(ww,bh,dd,c,x+ox,y+yy,z+oz,kind);if(record)facade.push([ww,bh,dd,c,ox,yy,oz]);}
  B(w+.35,y-low+.4,d+.35,0xaaa69f,0,(low-y-.4)/2,0,'concrete');
  B(w,h,d,wall,0,h/2,0,zone==='volcanic'?'stone':tower||warehouse?'concrete':'plaster');
  // Distinct massing rather than identical rectangular towers: podiums, vertical wings and Deco fins.
@@ -1330,13 +1344,13 @@ function metroParcel(x,z,serial,frontage=true){
  else if(shop){B(w+.4,.55,d+.4,roof,0,h+.275,0,'roof',true);B(w*.72,2.65,.12,glass,0,1.85,d/2+.1,'glass');B(w*.94,.8,.22,[0x297b79,0xb66d4c,0x657f9b,0x9c824e][style%4],0,3.6,d/2+.16);B(w*.91,.2,2.25,trim,0,4.18,d/2+1);for(let k of [-1,1])B(.23,3,.23,trim,k*w*.42,1.5,d/2+1.65);}
  else {for(let yy=2.5;yy<h-.65;yy+=3.1)for(let side of [-1,1])for(let k of [-1,1]){B(w*.20,1.5,.15,glass,k*w*.25,yy,side*(d/2+.09),'glass');B(.15,1.5,d*.20,glass,side*(w/2+.09),yy,k*d*.25,'glass');}
   if(zone==='desert'||zone==='island'||villa||style%4===0){B(w+.6,.4,d+.6,roof,0,h+.2,0,'roof',true);B(w*.42,1.5,d*.43,trim,w*.14,h+.75,-d*.1,'',true);}
-  else{let rise=2.3+style*.19;architecturalRoof(w,d,rise,roof,x,y+h,z,style%2?'hip':'gable');h+=rise;}
+  else{let rise=2.3+style*.19;architecturalRoof(W,D,rise,roof,x,y+h,z,style%2?'hip':'gable');h+=rise;}
   B(3.1,.22,1.6,trim,0,3.28,d/2+.62);for(let k of [-1,1])B(.16,3,.16,trim,k*1.35,1.5,d/2+1.2);
  }
  B(tower?4.1:2.1,2.9,.18,0x414d54,0,1.46,d/2+.19);B(3.2,.16,1.25,0xc5c4bd,0,.1,d/2+.56);
  // Utility equipment, street-level awnings and rooftop gardens on selected buildings.
  if(tower||hotel||apartment){for(let k of [-1,1]){B(2.4,1.5,2.8,0x879398,k*w*.30,h+.75,-d*.24,'concrete',true);B(2.1,.1,2.1,0x67727a,k*w*.30,h+1.55,-d*.24,'',true);}if(hotel){B(w*.68,.24,3.1,0xeee5cf,0,3.2,d*.5+1.3);for(let k of [-1,1])B(.26,3.1,.26,trim,k*w*.29,1.55,d*.5+2.5);}}
- let o={x,z,w,d,baseY:y,height:h,color:'#'+wall.toString(16).padStart(6,'0'),architecture:{roof,glass,trim,shape:'terrace'},facade,metroZone:zone};obs.push(o);metropolisParcels.push(o);spatialAdd(metroParcelGrid,o,x-w/2-35,x+w/2+35,z-d/2-35,z+d/2+35);return true;
+ let o={x,z,w:W,d:D,facing,frontRoad,buildingUse:tower?'office':hotel?'hotel':warehouse?'warehouse':apartment?'apartments':shop?'retail':villa?'villa':'house',baseY:y,height:h,color:'#'+wall.toString(16).padStart(6,'0'),architecture:{roof,glass,trim,shape:'terrace'},facade,metroZone:zone};obs.push(o);metropolisParcels.push(o);spatialAdd(metroParcelGrid,o,x-W/2-35,x+W/2+35,z-D/2-35,z+D/2+35);return true;
 }
 async function buildMetropolis(){
  if(!footprintGrid)initFootprintGrid();let target=800,serial=0;
@@ -1368,6 +1382,32 @@ function landscapeMetropolis(){
  shadow.computeBoundingSphere();scene.add(shadow);buildingCullMeshes.push(shadow);
 }
 landscapeMetropolis();
+function addUrbanPatch(x,z,w,d,color,kind){
+ let verts=[],indices=[],nx=Math.max(1,Math.ceil(w/8)),nz=Math.max(1,Math.ceil(d/8));
+ for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){let px=x+w*(i/nx-.5),pz=z+d*(j/nz-.5);verts.push(px,terrainMeshHeight(px,pz)+.12,pz);if(j&&i){let k=j*(nx+1)+i;indices.push(k-nx-2,k-1,k-nx-1,k-nx-1,k-1,k);}}
+ let g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(verts,3));g.setIndex(indices);g.computeVertexNormals();let m=new T.Mesh(g,new T.MeshStandardMaterial({color,roughness:.96,side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1}));scene.add(m);
+ urbanGroundPatches.push({x,z,w,d,color,kind,points:[{x:x-w/2,z:z-d/2},{x:x+w/2,z:z-d/2},{x:x+w/2,z:z+d/2},{x:x-w/2,z:z+d/2}]});
+}
+function cityProp(w,h,d,color,x,y,z,kind=''){queueBuildingBox(w,h,d,color,x,y,z,kind);}
+function streetBench(x,z,y){cityProp(2.8,.16,.75,0x936d49,x,y+.55,z);cityProp(2.8,.55,.14,0x936d49,x,y+.92,z-.31);for(let dx of [-1,1])cityProp(.13,.52,.65,0x4c575d,x+dx,y+.26,z);}
+function populatePublicLots(){for(let o of worldLots){let {x,z,w,d,kind}=o,at=(dx,dz)=>terrainMeshHeight(x+dx,z+dz)+.18;
+ let paved=['parking','depot','plaza','market'].includes(kind);addUrbanPatch(x,z,w,d,paved?0xa6aaa7:kind==='sport'?0x8a9f87:kind==='beach'?0xdac5a0:0x799960,kind);
+ if(kind==='plaza'||kind==='market'){for(let side of [-1,1])for(let j=-1;j<=1;j++){let dx=side*(w/2-5),dz=j*d*.29;streetBench(x+dx,z+dz,at(dx,dz));cityProp(1.45,.46,1.45,0xb7b5aa,x+dx,at(dx,dz)+.23,z+dz+3);cityProp(1.14,.42,1.14,0x63824a,x+dx,at(dx,dz)+.62,z+dz+3);}
+ if(kind==='plaza'){cityProp(14,.34,14,0xc7cac3,x,at(0,0)+.17,z,'concrete');cityProp(10,.22,10,0x6bafbe,x,at(0,0)+.4,z,'glass');cityProp(2.6,2.8,2.6,0xb7c2bf,x,at(0,0)+1.8,z,'stone');}
+ else for(let j=-1;j<=1;j++){let dx=j*12;cityProp(8,.22,6,0xc4b28e,x+dx,at(dx,0)+.11,z);for(let a of [-1,1])for(let b of [-1,1])cityProp(.2,3,.2,0x7d7669,x+dx+a*3.5,at(dx,0)+1.5,z+b*2.5);cityProp(8.4,.25,6.4,[0xe2c0a0,0x7aadb0,0xd1ac6a][j+1],x+dx,at(dx,0)+3.15,z);}}
+ if(kind==='park'||kind==='beach'){addUrbanPatch(x,z,5,d*.84,0xc7bda8,'walk');addUrbanPatch(x,z,w*.80,4.5,0xc7bda8,'walk');for(let side of [-1,1])for(let j of [-1,1]){let dx=side*7,dz=j*d*.28;streetBench(x+dx,z+dz,at(dx,dz));}}
+ if(kind==='parking'||kind==='depot'){addUrbanPatch(x,z,w-2,d-2,0x575e62,'asphalt');for(let side of [-1,1])for(let dx=-w/2+4;dx<w/2-2;dx+=5.7){let dz=side*(d/2-6);cityProp(.13,.04,10,0xe6e5d8,x+dx,at(dx,dz)+.02,z+dz);}
+ if(kind==='depot')for(let k=0;k<5;k++){let dx=-w*.30+(k%3)*12,dz=-d*.19+Math.floor(k/3)*6;for(let level=0;level<1+(k%2);level++)cityProp(10,2.7,4.8,[0x9f5448,0x697c92,0xa8a27f][k%3],x+dx,at(dx,dz)+1.35+level*2.75,z+dz,'concrete');obs.push({x:x+dx,z:z+dz,w:10,d:4.8,baseY:at(dx,dz),height:2.7*(1+k%2),color:'#777f86',architecture:{roof:0x81878a}});}}
+ if(kind==='sport'){addUrbanPatch(x,z,w-9,d-9,0x577f67,'court');for(let side of [-1,1]){cityProp(w-10,.045,.16,0xecefe3,x,at(0,side*(d/2-6))+.02,z+side*(d/2-6));cityProp(.16,.045,d-12,0xecefe3,x+side*(w/2-5),at(side*(w/2-5),0)+.02,z);}cityProp(.16,.045,d-12,0xecefe3,x,at(0,0)+.02,z);}
+}}
+function connectBuildingFrontages(){for(let o of metropolisParcels){let {x,z,w,d,facing,frontRoad:e,metroZone:zone}=o;if(!e||zone==='mountain')continue;
+ let nx=[0,1,0,-1][facing],nz=[1,0,-1,0][facing],half=nx?w/2:d/2,dx=e.q.x-e.p.x,dz=e.q.z-e.p.z,t=Math.max(0,Math.min(1,((x-e.p.x)*dx+(z-e.p.z)*dz)/(dx*dx+dz*dz||1))),ax=e.p.x+t*dx,az=e.p.z+t*dz,reach=Math.min(20,Math.hypot(ax-x,az-z)-e.w/2-half-9);
+ if(reach<3)continue;let px=x+nx*(half+reach/2),pz=z+nz*(half+reach/2),pw=nx?reach:Math.min(w,zone==='downtown'||zone==='coastal'?w:5),pd=nz?reach:Math.min(d,zone==='downtown'||zone==='coastal'?d:5),rad=Math.hypot(pw,pd)/2;
+ if(waterGap(px,pz)<rad+4||lotOccupied(px,pz,pw,pd)||obs.some(q=>q!==o&&Math.abs(px-q.x)<(pw+q.w)/2+1&&Math.abs(pz-q.z)<(pd+q.d)/2+1)||edges.some(q=>dist(px,pz,q).d<q.w/2+rad+3))continue;
+ addUrbanPatch(px,pz,pw,pd,zone==='downtown'||zone==='coastal'?0xb6b7b2:0x929692,'frontage');
+}}
+populatePublicLots();connectBuildingFrontages();
+console.info('Urban public spaces',worldLots.length,'ground surfaces',urbanGroundPatches.length,'buildings',metropolisParcels.length);
 // A regional airfield on reserved land, with apron, hangars and markings; never across a street.
 function createCoastalAirfield(){let x=-495,z=700,y=ground(x,z),w=48,d=360;let corners=[[-1,-1],[-1,1],[1,-1],[1,1]].map(([a,b])=>ground(x+a*w/2,z+b*d/2));if(Math.max(...corners)-Math.min(...corners)>5)return;let yy=Math.max(y,...corners)+.2;box(w,.22,d,0x45494d,x,yy,z);for(let i=0;i<17;i++)box(.36,.04,9,0xf6f2df,x,yy+.14,z-160+i*20);for(let side of [-1,1]){for(let i=0;i<6;i++)box(1.4,.045,10,0xf0eee4,x-17+i*6.8,yy+.14,z+side*164);box(24,.12,54,0xaeb4b6,x+side*36,yy-.02,z+90);}for(let j=0;j<3;j++){let xx=x-65,zz=z-105+j*50;queueBuildingBox(27,9,34,0xb0b8bd,xx,yy+4.5,zz,'concrete');queueBuildingBox(27.5,.5,34.5,0x687784,xx,yy+9.25,zz,'roof');obs.push({x:xx,z:zz,w:27,d:34,height:10,baseY:yy,color:'#b0b8bd',architecture:{roof:0x687784,shape:'terrace'}});}}
 createCoastalAirfield();
@@ -1402,7 +1442,7 @@ function buildCloudKingdom(){
 // No former cloud assets in the new realistic world.
 let rng=812;function random(){rng=(Math.imul(rng,1664525)+1013904223)>>>0;return rng/4294967296;}
 const trees=[], fields=[],stormTreeStates=new Map();
-function roadClearance(e){return Math.max(e.w,...adj[e.a].map(k=>k.w),...adj[e.b].map(k=>k.w))/2+(e.auxiliary?LANE_WIDTH+6:e.ramp?LANE_WIDTH+5:e.busBay?17:e.taxiBay?13:5);}function clearLand(x,z,r){return (!coastalWorldActive||waterGap(x,z)>r+17)&&lavaDistance(x,z)>r+4&&!inParking(x,z,r)&&!edges.some(e=>dist(x,z,e).d<roadClearance(e)+r+5)&&!obs.some(o=>Math.abs(x-o.x)<o.w/2+r&&Math.abs(z-o.z)<o.d/2+r);}
+function roadClearance(e){return Math.max(e.w,...adj[e.a].map(k=>k.w),...adj[e.b].map(k=>k.w))/2+(e.auxiliary?LANE_WIDTH+6:e.ramp?LANE_WIDTH+5:e.busBay?17:e.taxiBay?13:5);}function clearLand(x,z,r){return !lotOccupied(x,z,r*2,r*2,1)&&!urbanGroundPatches.some(o=>Math.abs(x-o.x)<o.w/2+r&&Math.abs(z-o.z)<o.d/2+r)&&(!coastalWorldActive||waterGap(x,z)>r+17)&&lavaDistance(x,z)>r+4&&!inParking(x,z,r)&&!edges.some(e=>dist(x,z,e).d<roadClearance(e)+r+5)&&!obs.some(o=>Math.abs(x-o.x)<o.w/2+r&&Math.abs(z-o.z)<o.d/2+r);}
 const trunkGeo=new T.CylinderGeometry(.45,.65,1,12),leafGeo=new T.IcosahedronGeometry(1,1),pineGeo=new T.ConeGeometry(1,1,13,3);
 await boot('Creating scenery…');const treeData=[];for(let i=0;i<6900;i++){let x=i<4300?-1950+random()*3900:-1850+random()*1050,z=i<4300?-1550+random()*3100:350+random()*1000;if((desertBlend(x,z)>.55)||volcanicSceneryHash(x,z)<smooth((volcanoMask(x,z)-.12)/.67)||!clearLand(x,z,5)||ringSet.size&&Math.hypot(x-40,z-40)<65||skiPisteDistance(x,z)<6||!coastalWorldActive&&Math.hypot(x-skiResort.x,z-skiResort.z)<110)continue;if(x>-350&&x<1100&&z>-350&&z<400&&random()<.75)continue;if(ground(x,z)>120)continue;let h=6+random()*12;let tree={x,z,h,pine:i>=4300||random()<.38,index:trees.length,base:ground(x,z),parts:[]};treeData.push(tree);trees.push(tree);}
 // Palm-lined coastal boulevards, in addition to the native broadleaf forest.
@@ -2792,6 +2832,7 @@ function paintMap(){
  function roadBand(e,start,end,lo,hi,fill){if(end<=start)return;let n=Math.max(1,Math.ceil(flat(e.p,e.q)*(end-start)/5)),left=[],right=[];for(let i=0;i<=n;i++){let t=start+(end-start)*i/n;left.push(mapRoadPoint(e,t,lo(t)));right.push(mapRoadPoint(e,t,hi(t)));}poly(left.concat(right.reverse()),fill);}
  mc.fillStyle='#b9ca9c';mc.fillRect(0,0,mapArt.width,mapArt.height);mc.lineCap='butt';mc.lineJoin='round';
  mapLayer('terrain',paintTerrainLayer);
+ mapLayer('public spaces',()=>{for(let p of urbanGroundPatches)poly(p.points,'#'+p.color.toString(16).padStart(6,'0'));});
  // River and eastern terrain are drawn by the common terrain raster above. No artificial urban block fills.
  mapLayer('buildings',()=>{for(let o of obs){
  let family=Number.isInteger(o.type)?Math.floor(o.type/10):-1,k=Number.isInteger(o.type)?o.type%10:0,desert=desertBlend(o.x,o.z)>.45||o.z<-1000&&o.x<300;rect(o.x+Math.min(10,2+(o.height||5)*.13),o.z+Math.min(10,2+(o.height||5)*.13),o.w,o.d,'#38483a45');if(o.mapRound){
@@ -4260,7 +4301,7 @@ setInterval(cloudSave,5000);setInterval(()=>{advertiseCityPresence();electCityHo
 (async()=>{try{const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm');sb=createClient('https://pzxupuryrjgbboldfrna.supabase.co','sb_publishable_DfP264XeZ6SIO2zlyLZOVg_HtMk0a_h',{auth:{storage:sessionStorageAdapter,persistSession:true}});sb.auth.onAuthStateChange((event,session)=>{if(session&&event==='TOKEN_REFRESHED')setTimeout(()=>sb.realtime.setAuth(session.access_token),0);});const {data}=await sb.auth.getSession();if(data.session)await joinOnline(data.session);else statusOnline('Log in to see other players');}catch(e){statusOnline('Offline — account unavailable');}})();
 
 
-const liveVersion='2026-11-28-live-241';
+const liveVersion='2026-11-28-live-242';
 function snapshotBus(){return busMode?{mode:true,line:busLine?{number:busLine.number,name:busLine.name,stops:busLine.stops.map(b=>({id:b.id,x:b.p.x,z:b.p.z,dir:b.dir})),legs:busLine.legs.slice(),approach:busLine.approach||0,payout:estimateBusReward(busLine)}:null,index:busStopIndex,seats:busOccupants.map(p=>p.seat),earned:busEarned}:null;}
 function restoreBus(p){if(!p?.mode)return false;toggleBusMode(true);if(!busMode)return false;busEarned=Number.isFinite(p.earned)?Math.max(0,p.earned):0;if(!p.line||[71,72].includes(p.line.number)||p.line.stops.some(q=>outsideMainWorld(q.x,q.z)))return true;let stops=p.line.stops.map(q=>transitStops.find(b=>b.id===q.id&&b.dir===q.dir&&Math.hypot(b.p.x-q.x,b.p.z-q.z)<12)||transitStops.filter(b=>b.dir===q.dir).sort((a,b)=>Math.hypot(a.p.x-q.x,a.p.z-q.z)-Math.hypot(b.p.x-q.x,b.p.z-q.z)).find(b=>Math.hypot(b.p.x-q.x,b.p.z-q.z)<28));if(stops.some(b=>!b)||!Number.isInteger(p.index)||p.index<0||p.index>=stops.length||p.line.legs.length!==stops.length){$('task').textContent=tr('Road changed — choose a new line');return true;}busLine={number:p.line.number,name:p.line.name,stops,legs:p.line.legs,approach:Number.isFinite(p.line.approach)?p.line.approach:0,payout:Number.isFinite(p.line.payout)?Math.max(5000,Math.min(52000,p.line.payout)):undefined};busStopIndex=p.index;for(let i of [...new Set(p.seats||[])]){let seat=busSeats[i];if(!seat)continue;let g=person(busRiderGroup,seat.x,seat.y,seat.z,true,i);g.scale.setScalar(.78);busOccupants.push({g,seat:i});}setBusTarget();updateBusSign();renderBusBoard();return true;}
 function restoreLiveUpdate(){try{let p=JSON.parse(sessionStorage.getItem('taxi-live-resume')||'null');if(!p||p.uid!==onlineUser?.id||Date.now()-p.at>600000)return;const findNode=v=>{if(!v)return -1;let best=-1,d=15;nodes.forEach((n,i)=>{let k=Math.hypot(n.x-v.x,n.z-v.z);if(k<d&&adj[i]?.length){best=i;d=k;}});return best;};if([p.x,p.y,p.z,p.h].every(Number.isFinite)){if(outsideMainWorld(p.x,p.z)||p.mapVersion!==241&&!roadFootprint(p.x,p.z,p.y,2)&&!inParking(p.x,p.z,0)){p.x=-94.5;p.z=122;p.y=nodes[parkingEnd].y;p.h=0;}x=p.x;z=p.z;y=surfaceHeight(x,z,p.y);h=p.h;s=0;keys.clear();yaw=Number.isFinite(p.yaw)?p.yaw:0;taxi.rotation.set(0,h,0);taxi.position.set(x,y+.15,z);pitch=p.pitch??.35;zoom=p.zoom??22;}restoreOnline(p.progress);if(restoreBus(p.bus)){sessionStorage.removeItem('taxi-live-resume');return;}let dest=findNode(p.target);if(p.job){let a=p.job.rideVersion===2?findNode(p.a):-1,b=p.job.rideVersion===2?findNode(p.b):-1;if(a>=0&&b>=0){job={...p.job,a,b};target=job.stage===1?b:a;comfort=p.comfort;rideStart=performance.now()-p.elapsed;rideBudget=p.budget;if(job.stage===1)boardRiders();$('task').textContent=job.stage===1?'Drive to destination':'Pick up passenger';}else{job=null;target=-1;$('task').textContent='Road changed — choose a new ride';}}else target=dest;route();renderBoard();sessionStorage.removeItem('taxi-live-resume');}catch(e){console.warn('Update restore failed',e);}}
