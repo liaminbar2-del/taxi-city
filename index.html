@@ -614,7 +614,7 @@ function rebuildCoastalWorld(){
  for(let i=0;i<e.length;i++){let [a,b,k]=e[i],lanes=['boulevard','highway','connector'].includes(k)?2:1,bridge=waterSegments.has(i);edge(ids[a],ids[b],2*LANE_WIDTH*lanes,k==='highway',bridge);Object.assign(edges.at(-1),{lanes,flowDir:0,oneWay:false,newCoastalRoad:true,roadClass:k,riverBridge:bridge,motorwayConnector:k==='connector',parking:k==='parking',organicBend:k==='scenic'||k==='keys'||k==='local'||k==='residential'||k==='boulevard'});}
  // Unused legacy node IDs must never become taxi or bus destinations.
  for(let id of [skiLot,skiGate])nodes[id].set(-2050,-30,-1650);
- console.info('Coastal rebuild v253: '+ids.length+' connected nodes, '+edges.length+' road segments, reachable='+networkConnected());
+ console.info('Coastal rebuild v256: '+ids.length+' connected nodes, '+edges.length+' road segments, reachable='+networkConnected());
 }
 rebuildCoastalWorld();
 // New cloud district appended to the original graph.
@@ -1222,9 +1222,9 @@ const modelCatalog=Array.from({length:60},(_,id)=>({id,family:Math.floor(id/10),
 // Material maps are shared by instanced meshes; no per-building downloads or extra draw calls per brick.
 const buildingBoxes=new Map(),architectureMaterials=new Map(),architectureTextures=new Map(),buildingCullMeshes=[],litWindowMaterials=[],roofBatches=new Map(),treeCullMeshes=[];
 function architectureTexture(kind){if(architectureTextures.has(kind))return architectureTextures.get(kind);let cv=document.createElement('canvas');cv.width=cv.height=256;let ctx=cv.getContext('2d'),im=ctx.createImageData(256,256),seed=7293;for(let yy=0;yy<256;yy++)for(let xx=0;xx<256;xx++){let x=xx/2,y=yy/2;seed=(Math.imul(seed,1664525)+1013904223)>>>0;let v=235-(seed/4294967296)*18;if(kind==='plaster'){v=228-13*Math.sin(x*.27+y*.19)*Math.sin(y*.32-x*.14)-(seed/4294967296)*13;}else if(kind==='brick'){let row=Math.floor(y/8),u=(x+(row%2)*12)%24;v=y%8<.7||u<.65?166:221+(row%3)*5-(seed/4294967296)*15-9*Math.cos(x*.43+y*.3);}else if(kind==='stone'){v=y%16<.7||(x+Math.floor(y/16)%2*16)%32<.7?170:232-(seed/4294967296)*25+7*Math.sin(x*.35)*Math.cos(y*.57);}else if(kind==='timber'){v=y%12===0?151:231-15*Math.abs(Math.sin(x*.23+y*.27))-(seed/4294967296)*12;}else if(kind==='glass'){v=184+38*Math.sin(y*.032)+21*Math.sin((x-y)*.05)+12*Math.cos(y*.12);if(x<3||y<3)v=145;}else if(kind==='roof'){v=y%9===0?162:218+17*Math.cos(x*Math.PI/8)-(seed/4294967296)*8;}else if(kind==='concrete'){v=(x%32===0||y%32===0)?199:235-(seed/4294967296)*16;}let k=(yy*256+xx)*4;v+=4*Math.sin(x*.49+y*.17)*Math.cos(y*.61-x*.31);im.data[k]=im.data[k+1]=im.data[k+2]=Math.max(0,Math.min(255,v));im.data[k+3]=255;}ctx.putImageData(im,0,0);let tex=new T.CanvasTexture(cv);tex.colorSpace=T.SRGBColorSpace;tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());architectureTextures.set(kind,tex);return tex;}
-function architectureMaterial(color,kind){if(!kind)return M(color);let key=color+':'+kind;if(!architectureMaterials.has(key)){let glass=kind==='glass'||kind==='litGlass',lit=kind==='litGlass',tex=architectureTexture(glass?'glass':kind);let mat=new T.MeshStandardMaterial({color,map:tex,bumpMap:glass?null:tex,bumpScale:kind==='brick'?.085:kind==='stone'?.095:kind==='roof'?.055:.022,roughness:glass?.20:kind==='roof'?.79:.89,metalness:glass?.26:0,envMapIntensity:glass?.85:.23,emissive:lit?0xffd29a:0x000000,emissiveIntensity:0});architectureMaterials.set(key,mat);if(lit)litWindowMaterials.push(mat);}return architectureMaterials.get(key);}
+function architectureMaterial(color,kind){if(!kind)return M(color);let key=color+':'+kind;if(!architectureMaterials.has(key)){let glass=kind==='glass'||kind==='litGlass',lit=kind==='litGlass',tex=architectureTexture(glass?'glass':kind);let mat=new T.MeshStandardMaterial({color,map:tex,bumpMap:null,bumpScale:0,roughness:glass?.20:kind==='roof'?.79:.89,metalness:glass?.26:0,envMapIntensity:glass?.85:.23,emissive:lit?0xffd29a:0x000000,emissiveIntensity:0});architectureMaterials.set(key,mat);if(lit)litWindowMaterials.push(mat);}return architectureMaterials.get(key);}
 function queueBuildingBox(w,h,d,c,x,y,z,kind=''){if(kind==='glass'&&h>1.2&&Math.min(w,d)<.2&&Math.abs(Math.sin(x*12.9898+y*78.233+z*37.719)*43758.5453)%1<.29)kind='litGlass';
- const detail=kind==='glass'||kind==='litGlass'||Math.min(w,h,d)<.48&&Math.max(w,h,d)<22,key=Math.floor(x/240)+','+Math.floor(z/240)+','+kind+','+detail;
+ const detail=(kind==='glass'||kind==='litGlass')&&Math.max(w,h,d)<4.5||Math.min(w,h,d)<.48&&Math.max(w,h,d)<22&&kind!=='glass'&&kind!=='litGlass',key=Math.floor(x/240)+','+Math.floor(z/240)+','+kind+','+detail;
  if(!buildingBoxes.has(key))buildingBoxes.set(key,{kind,detail,items:[]});buildingBoxes.get(key).items.push([w,h,d,x,y,z,c]);}
 function finishBuildingBoxes(){let unit=new T.BoxGeometry(1,1,1),o=new T.Object3D(),color=new T.Color();
  for(let {kind,detail,items} of buildingBoxes.values()){let m=new T.InstancedMesh(unit,architectureMaterial(0xffffff,kind),items.length);
@@ -1313,8 +1313,8 @@ function district(x0,x1,z0,z1,step,families){if(coastalWorldActive)return;let n=
 // 800 individual parcels, multiple massing families; shared instanced geometry limits draw calls.
 const metropolisParcels=[],metroParcelGrid=new Map(),worldLots=[],urbanGroundPatches=[];
 const metroFamilies=['cottage','farmhouse','chalet','bungalow','townhouse','villa','courtyard','duplex','corner-shop','market','cafe','showroom','warehouse','apartment','hotel','office','stepped-tower','glass-tower'];
-const architectureCatalog=Array.from({length:1152},(_,id)=>({id,family:Math.floor(id/64),form:Math.floor(id%64/8),palette:id%8}));const usedMetroDesigns=new Set();
-function selectMetroDesign(zone,seed,forced){let families=forced||zone==='village'?[0,1,2,3,4,7]:zone==='downtown'?[4,8,9,10,11,13,15,16,17]:zone==='coastal'?[5,6,8,10,11,13,14,15,17]:zone==='industrial'?[8,9,11,12,15]:zone==='luxury'?[3,5,6,7]:zone==='mountain'?[0,1,2,3]:[0,1,3,4,5,6,7,8,9,10,13];let candidates=families.flatMap(f=>architectureCatalog.slice(f*64,f*64+64)),start=Math.floor(seed*candidates.length);for(let i=0;i<candidates.length;i++){let a=candidates[(start+i)%candidates.length];if(!usedMetroDesigns.has(a.id))return a;}return candidates[start];}
+const architectureCatalog=Array.from({length:1152},(_,id)=>({id,family:Math.floor(id/64),form:Math.floor(id%64/8),palette:id%8}));const usedMetroDesigns=new Set(),metroDesignPools=new Map();
+function selectMetroDesign(zone,seed,forced){let families=forced||zone==='village'?[0,1,2,3,4,7]:zone==='downtown'?[4,8,9,10,11,13,15,16,17]:zone==='coastal'?[5,6,8,10,11,13,14,15,17]:zone==='industrial'?[8,9,11,12,15]:zone==='luxury'?[3,5,6,7]:zone==='mountain'?[0,1,2,3]:[0,1,3,4,5,6,7,8,9,10,13];let key=families.join(','),candidates=metroDesignPools.get(key);if(!candidates){candidates=families.flatMap(f=>architectureCatalog.slice(f*64,f*64+64));metroDesignPools.set(key,candidates);}let start=Math.floor(seed*candidates.length);for(let i=0;i<candidates.length;i++){let a=candidates[(start+i)%candidates.length];if(!usedMetroDesigns.has(a.id))return a;}return candidates[start];}
 function lotOccupied(x,z,w,d,margin=3){return worldLots.some(o=>Math.abs(x-o.x)<(w+o.w)/2+margin&&Math.abs(z-o.z)<(d+o.d)/2+margin);}
 function reserveWorldLots(){
  const candidates=[['plaza',350,170,55,48],['plaza',600,660,48,45],['plaza',70,610,40,42],['park',-130,370,72,50],['park',-350,130,65,55],['park',-850,-20,65,58],['park',-1110,180,60,48],['park',1545,380,40,42],['sport',-80,845,66,48],['sport',-1140,-335,58,44],['parking',435,-760,54,44],['parking',730,395,54,37],['parking',1510,120,46,38],['parking',-1100,-80,54,42],['depot',510,-1030,66,62],['depot',235,-740,58,58],['market',-1335,-320,48,40],['market',-350,-345,42,36],['beach',1650,650,28,48],['beach',1480,830,34,42]];
@@ -1372,7 +1372,7 @@ function metroParcel(x,z,serial,frontage=true,forcedRural=false){
    for(let side of [-1,1]){// Individually tinted window bays, recessed frames and occasional warm interiors.
     let bays=tower?3:2;for(let k=0;k<bays;k++){let tx=(k+.5-bays/2)*w*.88/bays,tz=(k+.5-bays/2)*d*.88/bays,lit=metroHash(x+k*7+yy,z+side*19)>.86,col=lit?0x83949b:glass;
      B(w*.78/bays,step*.67,.12,col,tx,yy,side*(d/2+.13),'glass');B(.12,step*.67,d*.78/bays,col,side*(w/2+.13),yy,tz,'glass');}
-    B(w*.9,.13,.22,trim,0,yy-step*.40,side*(d/2+.13));B(.22,.13,d*.9,trim,side*(w/2+.13),yy-step*.40,0);
+    if(tower)B(w*.84,.10,.23,trim,0,yy,side*(d/2+.23));B(w*.9,.13,.22,trim,0,yy-step*.40,side*(d/2+.13));B(.22,.13,d*.9,trim,side*(w/2+.13),yy-step*.40,0);
     if(hotel||apartment){if(Math.round(yy/step)%2===style%2){B(w*.76,.23,1.65,trim,0,yy-step*.41,side*(d/2+.74));B(w*.74,.64,.1,glass,0,yy-step*.28,side*(d/2+1.53),'glass');}}}
    if(tower&&Math.round(yy/step)%3===0)B(w+.3,.16,d+.3,trim,0,yy-step*.42,0);
   }
@@ -1441,15 +1441,15 @@ async function buildMetropolis(){
        metroParcel(e.p.x+dx*m/l+nx*setback*side,e.p.z+dz*m/l+nz*setback*side,serial++);
        if(metropolisParcels.length>=extraTarget)break;
      }
-   }await boot('Adding buildings '+(metropolisParcels.length-originalTotal)+' / 500…');
+   }await boot('Adding buildings '+metropolisParcels.length+' / '+extraTarget+'…');
  }
  for(let i=0;i<18000&&metropolisParcels.length<extraTarget;i++){
    let px=-2400+metroHash(i+49001,183)*4800,pz=-1960+metroHash(i+49001,231)*3920;
    let nearby=new Set([-96,0,96].flatMap(dx=>[-96,0,96].flatMap(dz=>spatialAt(footprintGrid,px+dx,pz+dz))));
    if([...nearby].some(e=>extraRoadSet.has(e)&&dist(px,pz,e).d<150))metroParcel(px,pz,serial++);
-   if(i%1400===0)await boot('Adding buildings '+(metropolisParcels.length-originalTotal)+' / 500…');
+   if(i%1400===0)await boot('Adding buildings '+metropolisParcels.length+' / '+extraTarget+'…');
  }
- console.info('Additional building parcels',metropolisParcels.length-originalTotal,'of 500');
+ console.info('Additional building parcels',metropolisParcels.length-originalTotal,'target total',extraTarget);
  console.info('New mainland buildings',metropolisParcels.length,'distinct designs used',usedMetroDesigns.size,'catalog',architectureCatalog.length);window.taxiArchitectureStats={buildings:metropolisParcels.length,distinctDesigns:usedMetroDesigns.size,catalog:architectureCatalog.length};
 }
 await buildMetropolis();
