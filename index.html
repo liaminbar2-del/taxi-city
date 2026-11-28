@@ -1470,20 +1470,21 @@ async function buildRealMiamiBuildings(){
  if(count<1501){let eligible=edges.filter(e=>!e.high&&!e.bridge&&!e.parking&&e.len>45);for(let pass=0;pass<4&&count+infill<1650;pass++)for(let e of eligible){if(count+infill>=1650)break;let l=flat(e.p,e.q),dx=(e.q.x-e.p.x)/l,dz=(e.q.z-e.p.z)/l;for(let m=22;m<l-22&&count+infill<1650;m+=25)for(let side of [-1,1]){let offset=e.w/2+19+pass*23;if(metroParcel(e.p.x+dx*m-dz*offset*side,e.p.z+dz*m+dx*offset*side,infill))infill++;}}}
  realMiami.buildingCounts={mapped:count,infill,types};document.getElementById('geo-source-status').textContent='Miami-Dade GIS • '+count+' mapped buildings'+(infill?' + '+infill+' original infill':'')+' • estimated architecture';console.info('GIS building types',types,'mapped',count,'infill',infill);
 }
-async function buildMetropolis(){if(realMiami){await buildRealMiamiBuildings();return;}
- if(!footprintGrid)initFootprintGrid();let target=1850,serial=0;
- let local=edges.filter(e=>!e.high&&!e.ramp&&!e.bridge&&!e.dirt&&!e.parking&&!e.oneWay&&!e.cloudRoad&&e.roadClass!=='scenic'&&e.len>48).sort((a,b)=>metroHash(a.a,a.b)-metroHash(b.a,b.b));
+async function buildMetropolis(){
+ if(!footprintGrid)initFootprintGrid();let target=800,serial=0;
+ let local=edges.filter(e=>!e.high&&!e.ramp&&!e.bridge&&!e.dirt&&!e.parking&&!e.oneWay&&!e.cloudRoad&&e.roadClass!=='scenic'&&e.len>30).sort((a,b)=>metroHash(a.a,a.b)-metroHash(b.a,b.b));
  for(let pass=0;pass<3&&metropolisParcels.length<target;pass++){
   for(let e of local){if(metropolisParcels.length>=target)break;let dx=e.q.x-e.p.x,dz=e.q.z-e.p.z,l=Math.hypot(dx,dz),nx=-dz/l,nz=dx/l;
-   for(let m=35;m<l-30&&metropolisParcels.length<target;m+=pass===0?21:30)for(let side of [-1,1]){let zone=metroZone(e.p.x+dx*m/l,e.p.z+dz*m/l),setback=e.w/2+(e.busBay||e.taxiBay?30:zone==='downtown'?17:zone==='coastal'?19:20)+pass*27;metroParcel(e.p.x+dx*m/l+nx*setback*side,e.p.z+dz*m/l+nz*setback*side,serial++);}
+   for(let m=Math.min(35,l*.5);m<=l-Math.min(30,l*.5)&&metropolisParcels.length<target;m+=pass===0?21:30)for(let side of [-1,1]){if(metropolisParcels.length>=target)break;let zone=metroZone(e.p.x+dx*m/l,e.p.z+dz*m/l),setback=e.w/2+(e.busBay||e.taxiBay?30:zone==='downtown'?17:zone==='coastal'?19:20)+pass*27;metroParcel(e.p.x+dx*m/l+nx*setback*side,e.p.z+dz*m/l+nz*setback*side,serial++);}
    if(serial%17===0)await boot('Rebuilding neighborhoods '+metropolisParcels.length+' / '+target+'…');
   }
  }
  // Fill additional residential plots near existing streets, not random remote skyscrapers.
- for(let i=0;i<36000&&metropolisParcels.length<target;i++){let x=-2450+metroHash(i,83)*4900,z=-1950+metroHash(i,131)*3900;let nearest=Infinity;for(let e of local){let d=dist(x,z,e).d;if(d<nearest)nearest=d;}if(nearest<(x< -1480?70:110))metroParcel(x,z,serial++);if(i%800===0)await boot('Finishing neighborhoods '+metropolisParcels.length+' / '+target+'…');}
+ for(let i=0;i<48000&&metropolisParcels.length<target;i++){let x=-2450+metroHash(i,83)*4900,z=-1950+metroHash(i,131)*3900;let nearest=Infinity;for(let e of local){let d=dist(x,z,e).d;if(d<nearest)nearest=d;}if(nearest<(x< -1480?70:110))metroParcel(x,z,serial++);if(i%800===0)await boot('Finishing neighborhoods '+metropolisParcels.length+' / '+target+'…');}
  console.info('New mainland buildings',metropolisParcels.length);
 }
-// Road-first phase: no residential or commercial buildings.
+await buildMetropolis();
+console.info("Building placement target",metropolisParcels.length,800);
 
 // Low-cost urban landscaping around the new parcels, using the same geographic records.
 function landscapeMetropolis(){
@@ -1500,7 +1501,7 @@ function landscapeMetropolis(){
  }
  shadow.computeBoundingSphere();scene.add(shadow);buildingCullMeshes.push(shadow);
 }
-// Building landscaping deferred.
+landscapeMetropolis();
 function addUrbanPatch(x,z,w,d,color,kind){
  let verts=[],indices=[],nx=Math.max(1,Math.ceil(w/8)),nz=Math.max(1,Math.ceil(d/8));
  for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){let px=x+w*(i/nx-.5),pz=z+d*(j/nz-.5);verts.push(px,terrainMeshHeight(px,pz)+.12,pz);if(j&&i){let k=j*(nx+1)+i;indices.push(k-nx-2,k-1,k-nx-1,k-nx-1,k-1,k);}}
@@ -1525,7 +1526,7 @@ function connectBuildingFrontages(){for(let o of metropolisParcels){let {x,z,w,d
  if(waterGap(px,pz)<rad+4||lotOccupied(px,pz,pw,pd)||obs.some(q=>q!==o&&Math.abs(px-q.x)<(pw+q.w)/2+1&&Math.abs(pz-q.z)<(pd+q.d)/2+1)||edges.some(q=>dist(px,pz,q).d<q.w/2+rad+3))continue;
  addUrbanPatch(px,pz,pw,pd,zone==='downtown'||zone==='coastal'?0xb6b7b2:0x929692,'frontage');
 }}
-// Public lots and building frontages deferred.
+connectBuildingFrontages();
  // Original regional storefront identities and parking courts, with all footprints checked before placement.
  function buildStreetBusinessDetails(){
  const names={shop:['BAY MARKET','PALM BAKERY','CORNER CAFE','SUNSET FLORIST','COASTAL BOOKS','HARBOR HARDWARE','CITRUS DELI','OCEAN CYCLES','LAGOON DINER','MARINA SUPPLY','CITY LAUNDRY','TROPIC GOODS'],hotel:['THE SEABREEZE','CASA PALOMA','THE AQUAMARINE','HOTEL CORAL','THE BREAKWATER','VISTA BAY'],motel:['PALM COURT','BAYVIEW INN','CYPRESS LODGE','SANDPIPER INN','MARINER REST','GOLDEN SHORE']};
