@@ -4690,7 +4690,7 @@ setInterval(cloudSave,5000);setInterval(liveHeartbeat,15000);document.addEventLi
 (async()=>{try{const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm');sb=createClient('https://pzxupuryrjgbboldfrna.supabase.co','sb_publishable_DfP264XeZ6SIO2zlyLZOVg_HtMk0a_h',{auth:{storage:sessionStorageAdapter,persistSession:true}});sb.auth.onAuthStateChange((event,session)=>{if(session&&event==='TOKEN_REFRESHED')setTimeout(()=>sb.realtime.setAuth(session.access_token),0);});const {data}=await sb.auth.getSession();if(data.session)await joinOnline(data.session);else statusOnline('Log in to see other players');}catch(e){statusOnline('Offline — account unavailable');}})();
 
 
-const liveVersion='2026-11-28-live-282';
+const liveVersion='2026-11-28-live-283';
 // Account-scoped, local-first checkpoint: committed before the page reloads.
 const resumeKey='taxi-live-resume',resumeBackupKey=()=>resumeKey+':'+onlineUser?.id;
 let resumeRestoring=false,resumeFailed=false,lastResumeCheckpoint=0;
@@ -4964,8 +4964,8 @@ runtimeRoadCache=true;terminalRuntimeGrid=new Map();for(let q of terminalRoundab
 /* Arcade flight controller, compact avionics and three unlockable aircraft. */
 const flightFleet=[
  {name:'Sky Finch',kind:0,color:0x327caa,max:52,price:0,upgrade:1600,span:10,len:8},
- {name:'Coastal Twin',kind:1,color:0x189e8a,max:60,price:6000,upgrade:2400,span:15,len:12},
- {name:'Metro Comet',kind:2,color:0x995cbd,max:69,price:14000,upgrade:3200,span:18,len:17}
+ {name:'Coastal Twin',kind:1,color:0x189e8a,max:60,price:250000,upgrade:2400,span:15,len:12},
+ {name:'Metro Comet',kind:2,color:0x995cbd,max:69,price:600000,upgrade:3200,span:18,len:17}
 ];
 const flightText=(en,he)=>uiLang==='he'?he:en;
 let flightModel=null,flightGear=[],flightProps=[],flightCockpit=null,flightScreen=null,flightScreenTexture=null,flightLastPaint=-Infinity,flightSelection=0,flightHidden=[],flightHeld=new Set(),flightProfile={owned:[0],levels:[0,0,0],selected:0};
