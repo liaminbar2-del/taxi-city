@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Taxi City 3D",
-  "short_name": "Taxi City",
+  "name": "MetroDrive – City Simulator",
+  "short_name": "MetroDrive",
   "description": "Open-world taxi and bus driving simulator",
   "start_url": "/?app=1",
   "scope": "/",
