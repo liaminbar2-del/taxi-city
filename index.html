@@ -651,7 +651,7 @@ async function loadRealMiami(){
  if(buildings.length<100)throw Error('Incomplete building layer');let waterAt=makeMiamiWater(water),graph=miamiGraph(roads,waterAt);return {graph,waterAt,buildings,roadFeatures:roads.length,waterFeatures:water.length};
 }
 function showGeoStatus(message,ok){let d=document.createElement('div');d.id='geo-source-status';d.style.cssText='position:fixed;left:8px;bottom:8px;z-index:95;background:#142337d9;color:white;font:11px Arial;padding:5px 8px;border-radius:5px;max-width:70vw;pointer-events:none';d.textContent=message;document.body.append(d);}
-try{realMiami=await loadRealMiami();coastalWorldLayout=realMiami.graph;parking.x=realMiami.graph.parking[0];parking.z=realMiami.graph.parking[1];parking.w=48;parking.d=44;showGeoStatus('Miami-Dade GIS • '+realMiami.graph.e.length+' road segments • building footprints loaded',true);}catch(error){realMiami=null;console.warn('Miami GIS unavailable; using previous map',error);showGeoStatus('Real Miami data unavailable — previous map loaded',false);}
+try{realMiami=await loadRealMiami();coastalWorldLayout=realMiami.graph;parking.x=realMiami.graph.parking[0];parking.z=realMiami.graph.parking[1];parking.w=78;parking.d=64;showGeoStatus('Miami-Dade GIS • '+realMiami.graph.e.length+' road segments • building footprints loaded',true);}catch(error){realMiami=null;console.warn('Miami GIS unavailable; using previous map',error);showGeoStatus('Real Miami data unavailable — previous map loaded. Reload to retry.',false);}
 function rebuildCoastalWorld(){
  coastalWorldActive=true;edges.length=0;transitStops.length=0;transitEdges.length=0;freewayRampNodes.clear();motorwayJoins.clear();snowTunnelEdges.length=0;trailEdges.clear();ring.length=0;
  let ids=[],{p,e}=coastalWorldLayout,oldAnchors=realMiami?new Map([[p[coastalWorldLayout.anchors.access].join(','),access],[p[coastalWorldLayout.anchors.entrance].join(','),entrance],[p[coastalWorldLayout.anchors.parkingEnd].join(','),parkingEnd]]):new Map([['-90,40',access],['-90,90',entrance],['-90,122',parkingEnd]]);
@@ -700,7 +700,7 @@ console.info('Consolidated junctions / directional motorway links',compactedCoun
 // v218: replace prior reservations after the actual stops have been verified.
 for(let e of edges){e.transitLane=false;delete e.v217TransitCandidate;}transitEdges.length=0;
 console.info('Public transit corridors',transitEdges.length,'segments / reserved meters',Math.round(transitEdges.reduce((d,e)=>d+e.len,0)),'bus-only connector',eastBusLink.len);
-const ROAD_WIDEN=1;LANE_WIDTH=7.4;for(let e of edges){if(!e.newCoastalRoad)continue;const k=e.roadClass;e.w=e.parking?16:k==='highway'?29.6:k==='boulevard'?27.2:k==='bridge'||k==='keys'?15.2:k==='scenic'?13.4:k==='residential'?11.8:13.6;}for(let b of transitStops){let e=b.e,d=e.q.clone().sub(e.p).setY(0).normalize(),n=new T.Vector3(-d.z,0,d.x);b.p.copy(e.p).lerp(e.q,b.t).addScaledVector(n,b.dir*(e.w/2+4.2));}
+const ROAD_WIDEN=1;LANE_WIDTH=7.4;for(let e of edges){if(!e.newCoastalRoad)continue;const k=e.roadClass;e.w=e.parking?16:realMiami?(k==='boulevard'?23.2:k==='residential'?10.4:12):k==='highway'?29.6:k==='boulevard'?27.2:k==='bridge'||k==='keys'?15.2:k==='scenic'?13.4:k==='residential'?11.8:13.6;}for(let b of transitStops){let e=b.e,d=e.q.clone().sub(e.p).setY(0).normalize(),n=new T.Vector3(-d.z,0,d.x);b.p.copy(e.p).lerp(e.q,b.t).addScaledVector(n,b.dir*(e.w/2+4.2));}
 // Original mainland only. Keep existing road/node IDs; no eastern expansion is generated.
 limitRoadGrades(edges,nodes.length+2);for(let e of edges)e.len=e.p.distanceTo(e.q);for(let b of transitStops)b.p.y=b.e.p.y+(b.e.q.y-b.e.p.y)*b.t;
 // Monotone cubic vertical curves with a common tangent at every highway seam.
@@ -725,7 +725,7 @@ function pavementStart(e){return mouth(e,e.a)/flat(e.p,e.q);}
 function pavementEnd(e){return 1-mouth(e,e.b)/flat(e.p,e.q);}
 // Regional stops are planned on real local road segments before terrain and scenery.
 // Keep the original stop IDs and reuse existing bays where they already serve a district.
-const regionalDistricts=[
+const regionalDistricts=realMiami?[[ 'downtown','Downtown Miami',-80.193,25.775,650],['east','South Beach',-80.135,25.781,650],['desertGate','Wynwood',-80.199,25.801,700],['eastDesert','Edgewater',-80.188,25.802,600],['oasis','Little Havana',-80.212,25.769,650],['westDesert','Overtown',-80.202,25.786,650],['market','Midtown',-80.193,25.808,650],['obsidian','PortMiami',-80.169,25.775,650],['ember','Mid-Beach',-80.128,25.809,600],['basalt','Flamingo Park',-80.139,25.784,550],['geothermal','South Pointe',-80.133,25.766,550],['coast','Brickell',-80.198,25.761,650],['port','Watson Island',-80.177,25.786,550],['forest','West Avenue',-80.147,25.783,550],['village','Venetian Islands',-80.164,25.790,600],['farm','Shenandoah',-80.213,25.753,650],['keys','Dodge Island',-80.160,25.772,550]].map(([key,name,lon,lat,r])=>[key,name,...miamiProject([lon,lat]),r]):[
  ['downtown','Bay City Downtown',325,510,380],['east','Ocean Beach',1510,475,380],
  ['desertGate','North Junction',315,-590,380],['eastDesert','North Bay',770,-760,350],
  ['oasis','Lake Country',-610,-815,400],['westDesert','Westport',-1260,-215,400],
