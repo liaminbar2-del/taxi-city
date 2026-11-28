@@ -2,7 +2,7 @@
   "id": "/",
   "name": "MetroDrive – City Simulator",
   "short_name": "MetroDrive",
-  "description": "Open-world taxi and bus driving simulator",
+  "description": "MetroDrive – City Simulator: explore an open world as a taxi or bus driver.",
   "start_url": "/?app=1",
   "scope": "/",
   "display": "standalone",
@@ -10,14 +10,14 @@
   "theme_color": "#142337",
   "icons": [
     {
-      "src": "/metrodrive-icon.jpg",
+      "src": "/metrodrive-icon.jpg?v=228",
       "sizes": "192x192",
       "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/metrodrive-icon.svg",
-      "sizes": "512x512 any",
+      "src": "/icon.svg?v=228",
+      "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     }
