@@ -661,7 +661,7 @@ async function loadRealMiami(){
  data={roads,water,buildings};let result=compile(data);void writeMiamiCache(data);return result;
 }
 function showGeoStatus(message,ok){let d=document.createElement('div');d.id='geo-source-status';d.style.cssText='position:fixed;left:8px;bottom:8px;z-index:95;background:#142337d9;color:white;font:11px Arial;padding:5px 8px;border-radius:5px;max-width:70vw;pointer-events:none';d.textContent=message;document.body.append(d);}
-try{realMiami=await loadRealMiami();coastalWorldLayout=realMiami.graph;parking.x=realMiami.graph.parking[0];parking.z=realMiami.graph.parking[1];parking.w=78;parking.d=64;showGeoStatus('Miami-Dade GIS • '+realMiami.graph.e.length+' road segments • building footprints loaded',true);}catch(error){realMiami=null;console.warn('Miami GIS unavailable; using previous map',error);showGeoStatus('Real Miami data unavailable — previous map loaded. Reload to retry.',false);}
+try{realMiami=await loadRealMiami();coastalWorldLayout=realMiami.graph;parking.x=realMiami.graph.parking[0];parking.z=realMiami.graph.parking[1];parking.w=78;parking.d=64;showGeoStatus('Miami-Dade GIS • '+realMiami.graph.e.length+' road segments • connected road network',true);}catch(error){realMiami=null;console.warn('Miami GIS unavailable; using previous map',error);showGeoStatus('Real Miami data unavailable — previous map loaded. Reload to retry.',false);}
 function rebuildCoastalWorld(){
  coastalWorldActive=true;edges.length=0;transitStops.length=0;transitEdges.length=0;freewayRampNodes.clear();motorwayJoins.clear();snowTunnelEdges.length=0;trailEdges.clear();ring.length=0;
  let ids=[],{p,e}=coastalWorldLayout,oldAnchors=realMiami?new Map([[p[coastalWorldLayout.anchors.access].join(','),access],[p[coastalWorldLayout.anchors.entrance].join(','),entrance],[p[coastalWorldLayout.anchors.parkingEnd].join(','),parkingEnd]]):new Map([['-90,40',access],['-90,90',entrance],['-90,122',parkingEnd]]);
@@ -1352,7 +1352,7 @@ function reserveWorldLots(){if(realMiami)return;
  let h=[ground(x,z),...[-1,1].flatMap(a=>[-1,1].map(b=>ground(x+a*w/2,z+b*d/2)))];if(Math.max(...h)-Math.min(...h)>2.8)continue;
  let nearest=Math.min(...edges.filter(e=>!e.high&&!e.bridge&&!e.parking).map(e=>dist(x,z,e).d));if(nearest>105)continue;best={kind,x,z,w,d,y:Math.max(...h)+.12};break;}if(best)break;}if(best)worldLots.push(best);}
 }
-reserveWorldLots();
+// Reserve no building lots during road-first phase.
 function metroHash(a,b=0){let n=Math.sin(a*12.9898+b*78.233)*43758.5453;return n-Math.floor(n);}
 function metroZone(x,z){if(realMiami){let lon=MIAMI_GIS.lon+x/miamiX,lat=MIAMI_GIS.lat-z/miamiZ;if(lon>-80.150)return 'coastal';if(lon>-80.18&&lon<-80.15&&lat<25.782)return 'industrial';if(lon>-80.205&&lon<-80.18&&lat<25.79)return 'downtown';if(lon>-80.211&&lon<-80.192&&lat>25.80)return 'industrial';return 'suburban';}x/=1.23;z/=1.23;
  if(z< -680&&x< -480)return 'mountain';
@@ -1483,7 +1483,8 @@ async function buildMetropolis(){if(realMiami){await buildRealMiamiBuildings();r
  for(let i=0;i<36000&&metropolisParcels.length<target;i++){let x=-2450+metroHash(i,83)*4900,z=-1950+metroHash(i,131)*3900;let nearest=Infinity;for(let e of local){let d=dist(x,z,e).d;if(d<nearest)nearest=d;}if(nearest<(x< -1480?70:110))metroParcel(x,z,serial++);if(i%800===0)await boot('Finishing neighborhoods '+metropolisParcels.length+' / '+target+'…');}
  console.info('New mainland buildings',metropolisParcels.length);
 }
-await buildMetropolis();
+// Road-first phase: no residential or commercial buildings.
+
 // Low-cost urban landscaping around the new parcels, using the same geographic records.
 function landscapeMetropolis(){
  const shadowCanvas=document.createElement('canvas');shadowCanvas.width=shadowCanvas.height=64;let c=shadowCanvas.getContext('2d'),grad=c.createRadialGradient(32,32,11,32,32,31);grad.addColorStop(0,'rgba(25,36,35,.43)');grad.addColorStop(1,'rgba(25,36,35,0)');c.fillStyle=grad;c.fillRect(0,0,64,64);
@@ -1499,7 +1500,7 @@ function landscapeMetropolis(){
  }
  shadow.computeBoundingSphere();scene.add(shadow);buildingCullMeshes.push(shadow);
 }
-landscapeMetropolis();
+// Building landscaping deferred.
 function addUrbanPatch(x,z,w,d,color,kind){
  let verts=[],indices=[],nx=Math.max(1,Math.ceil(w/8)),nz=Math.max(1,Math.ceil(d/8));
  for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){let px=x+w*(i/nx-.5),pz=z+d*(j/nz-.5);verts.push(px,terrainMeshHeight(px,pz)+.12,pz);if(j&&i){let k=j*(nx+1)+i;indices.push(k-nx-2,k-1,k-nx-1,k-nx-1,k-1,k);}}
@@ -1524,7 +1525,7 @@ function connectBuildingFrontages(){for(let o of metropolisParcels){let {x,z,w,d
  if(waterGap(px,pz)<rad+4||lotOccupied(px,pz,pw,pd)||obs.some(q=>q!==o&&Math.abs(px-q.x)<(pw+q.w)/2+1&&Math.abs(pz-q.z)<(pd+q.d)/2+1)||edges.some(q=>dist(px,pz,q).d<q.w/2+rad+3))continue;
  addUrbanPatch(px,pz,pw,pd,zone==='downtown'||zone==='coastal'?0xb6b7b2:0x929692,'frontage');
 }}
-populatePublicLots();connectBuildingFrontages();
+// Public lots and building frontages deferred.
  // Original regional storefront identities and parking courts, with all footprints checked before placement.
  function buildStreetBusinessDetails(){
  const names={shop:['BAY MARKET','PALM BAKERY','CORNER CAFE','SUNSET FLORIST','COASTAL BOOKS','HARBOR HARDWARE','CITRUS DELI','OCEAN CYCLES','LAGOON DINER','MARINA SUPPLY','CITY LAUNDRY','TROPIC GOODS'],hotel:['THE SEABREEZE','CASA PALOMA','THE AQUAMARINE','HOTEL CORAL','THE BREAKWATER','VISTA BAY'],motel:['PALM COURT','BAYVIEW INN','CYPRESS LODGE','SANDPIPER INN','MARINER REST','GOLDEN SHORE']};
@@ -4451,7 +4452,7 @@ function updateUrbanContactShadows(now){
  add(taxi);for(let a of ai)add(a.g);for(let g of parkedCars)add(g);for(let a of peers.values())add(a.g);
  urbanShadows.count=i;urbanShadows.instanceMatrix.needsUpdate=true;
 }
-function renderSmoothCity(now,dt){for(let t of coastalWaterTextures){t.offset.x=(now*.000012)%1;t.offset.y=(now*.000007)%1;}urbanSky.position.copy(camera.position);let restore=[];if(ownsCitySimulation()){let alpha=Math.min(1,trafficAccum/trafficStepTime);for(let a of ai){let g=a.g;if(!g.visible||!a.renderPrevious)continue;let p=poseOf(g);if(Math.hypot(p.x-a.renderPrevious.x,p.z-a.renderPrevious.z)>18)continue;restore.push([g,p]);setTrafficPose(g,interpolateTrafficPose(a.renderPrevious,p,alpha));}}const hiddenInfrastructure=[];try{for(const o of scene.children){if(o.visible&&!natureOnlyRoots.has(o)&&o!==taxi&&o!==urbanSky&&!o.isLight&&!o.isCamera){hiddenInfrastructure.push(o);o.visible=false;}}renderer.render(scene,camera);}finally{for(const o of hiddenInfrastructure)o.visible=true;for(let [g,p] of restore)setTrafficPose(g,p);}}
+function renderSmoothCity(now,dt){for(let t of coastalWaterTextures){t.offset.x=(now*.000012)%1;t.offset.y=(now*.000007)%1;}urbanSky.position.copy(camera.position);let restore=[];if(ownsCitySimulation()){let alpha=Math.min(1,trafficAccum/trafficStepTime);for(let a of ai){let g=a.g;if(!g.visible||!a.renderPrevious)continue;let p=poseOf(g);if(Math.hypot(p.x-a.renderPrevious.x,p.z-a.renderPrevious.z)>18)continue;restore.push([g,p]);setTrafficPose(g,interpolateTrafficPose(a.renderPrevious,p,alpha));}}try{updateUrbanContactShadows(now);renderer.render(scene,camera);}finally{for(let [g,p] of restore)setTrafficPose(g,p);}}
 function bufferedTrafficPose(samples,at){if(!samples?.length)return null;if(at<=samples[0].at)return samples[0];for(let i=1;i<samples.length;i++){let a=samples[i-1],b=samples[i];if(at<=b.at){let t=Math.max(0,Math.min(1,(at-a.at)/Math.max(1,b.at-a.at))),p=interpolateTrafficPose(a,b,t);if(a.bus&&b.bus){let d=Math.hypot(b.x-a.x,b.z-a.z),turn=Math.abs(Math.atan2(Math.sin(b.h-a.h),Math.cos(b.h-a.h)));if(d>.15&&d<22&&turn>.015&&turn<1.2){let dx=(b.x-a.x)/d,dz=(b.z-a.z)/d,fa=-Math.sin(a.h)*dx-Math.cos(a.h)*dz,fb=-Math.sin(b.h)*dx-Math.cos(b.h)*dz;if(fa>.15&&fb>.15){let u=t*t*(3-2*t),k0=t*(1-t)*(1-t),k1=t*t*(t-1);p.x=a.x+(b.x-a.x)*u+d*(-Math.sin(a.h)*k0-Math.sin(b.h)*k1);p.z=a.z+(b.z-a.z)*u+d*(-Math.cos(a.h)*k0-Math.cos(b.h)*k1);}}}return p;}}let b=samples.at(-1),a=samples.at(-2);if(!a)return b;let t=1+Math.min(180,Math.max(0,at-b.at))/Math.max(1,b.at-a.at);return interpolateTrafficPose(a,b,t);}
 function stepSharedCity(dt,now){if(ownsCitySimulation()){
  if(!spawnStarted)spawn(zone(x));trafficAccum=Math.min(.18,trafficAccum+dt);for(let steps=0;trafficAccum>=trafficStepTime&&steps<2;steps++){trafficAccum-=trafficStepTime;for(let a of ai)if(a.g.visible)a.renderPrevious=poseOf(a.g);smartSignals(trafficStepTime,now);sharedTraffic(trafficStepTime);}if(now-lastTrafficCleanup>850){lastTrafficCleanup=now;clearStuckStationBuses(now);cleanupStoppedTraffic(now);}
