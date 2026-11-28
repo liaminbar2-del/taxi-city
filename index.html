@@ -609,15 +609,20 @@ const MIAMI_GIS={lon:-80.171,lat:25.783,scale:.59,roads:'https://gisweb.miamidad
 const miamiX=111320*Math.cos(MIAMI_GIS.lat*Math.PI/180)*MIAMI_GIS.scale,miamiZ=111320*MIAMI_GIS.scale;
 const miamiProject=p=>[(p[0]-MIAMI_GIS.lon)*miamiX,(MIAMI_GIS.lat-p[1])*miamiZ];
 const miamiBBox=[MIAMI_GIS.lon-WORLD_WIDTH/2/miamiX,MIAMI_GIS.lat-WORLD_HEIGHT/2/miamiZ,MIAMI_GIS.lon+WORLD_WIDTH/2/miamiX,MIAMI_GIS.lat+WORLD_HEIGHT/2/miamiZ];
-async function gisFeatures(url,fields,where='1=1',maxPages=24){
- let features=[],ids=new Set();for(let offset=0,page=0;page<maxPages;page++,offset+=1000){
- let params=new URLSearchParams({f:'json',where,geometry:miamiBBox.join(','),geometryType:'esriGeometryEnvelope',inSR:'4326',outSR:'4326',spatialRel:'esriSpatialRelIntersects',outFields:fields,returnGeometry:'true',resultOffset:String(offset),resultRecordCount:'1000',orderByFields:'OBJECTID ASC'});
- let res=await fetch(url+'/query?'+params,{signal:AbortSignal.timeout(18000)});if(!res.ok)throw Error('GIS HTTP '+res.status);let j=await res.json();if(j.error||!Array.isArray(j.features))throw Error(j.error?.message||'Invalid GIS data');
- let added=0;for(let f of j.features){let id=f.attributes?.OBJECTID??f.attributes?.objectid;if(id!=null&&ids.has(id))continue;if(id!=null)ids.add(id);features.push(f);added++;}
- if(!added||!j.exceededTransferLimit&&j.features.length<1000)return features;
- }return features;
+const GIS_CACHE_NAME='metrodrive-miami-geography-1',GIS_CACHE_KEY='/__miami_geography_v1.json';
+async function readMiamiCache(){try{if(!('caches' in window))return null;let cache=await caches.open(GIS_CACHE_NAME),res=await cache.match(GIS_CACHE_KEY);if(!res)return null;let data=await res.json();return data?.roads?.length&&data?.water?.length&&data?.buildings?.length?data:null;}catch{return null;}}
+async function writeMiamiCache(data){try{if(!('caches' in window))return;let cache=await caches.open(GIS_CACHE_NAME);await cache.put(GIS_CACHE_KEY,new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}}));}catch(e){console.warn('Map cache unavailable',e);}}
+async function gisFeatures(url,fields,where='1=1',maxPages=24,signal){
+ async function page(offset,count){let params=new URLSearchParams({f:'json',where,geometry:miamiBBox.join(','),geometryType:'esriGeometryEnvelope',inSR:'4326',outSR:'4326',spatialRel:'esriSpatialRelIntersects',outFields:fields,returnGeometry:'true',resultOffset:String(offset),resultRecordCount:String(count),orderByFields:'OBJECTID ASC'});
+ let res=await fetch(url+'/query?'+params,{signal});if(!res.ok)throw Error('GIS HTTP '+res.status);let j=await res.json();if(j.error||!Array.isArray(j.features))throw Error(j.error?.message||'Invalid GIS data');return j;}
+ let first=await page(0,1000),features=[],ids=new Set();
+ function add(j){for(let f of j.features){let id=f.attributes?.OBJECTID??f.attributes?.objectid;if(id!=null&&ids.has(id))continue;if(id!=null)ids.add(id);features.push(f);}}
+ add(first);if(!first.features.length||!first.exceededTransferLimit&&first.features.length<1000)return features;
+ let stride=first.features.length||1000;
+ for(let i=1;i<maxPages;i+=4){let jobs=[];for(let j=i;j<Math.min(i+4,maxPages);j++)jobs.push(page(j*stride,stride));let results=await Promise.all(jobs);for(let j of results){add(j);if(!j.features.length||!j.exceededTransferLimit&&j.features.length<stride)return features;}}
+ return features;
 }
-async function gisTry(urls,fields,where,maxPages){let last;for(let url of urls)try{let f=await gisFeatures(url,fields,where,maxPages);if(f.length)return f;}catch(e){last=e;}throw last||Error('Empty GIS source');}
+async function gisTry(urls,fields,where,maxPages,signal){let last;for(let url of urls){if(signal.aborted)throw Error('Geographic download timed out');try{let f=await gisFeatures(url,fields,where,maxPages,signal);if(f.length)return f;}catch(e){last=e;}}throw last||Error('Empty GIS source');}
 function makeMiamiWater(features){
  const step=10,w=WORLD_COLS,h=WORLD_ROWS,cv=document.createElement('canvas');cv.width=w;cv.height=h;let g=cv.getContext('2d',{willReadFrequently:true});g.fillStyle='#fff';g.fillRect(0,0,w,h);g.fillStyle='#000';
  for(let f of features){let rings=f.geometry?.rings;if(!rings?.length)continue;g.beginPath();for(let ring of rings){let first=true;for(let v of ring){let [x,z]=miamiProject(v);if(first)g.moveTo(x/step+w/2,z/step+h/2);else g.lineTo(x/step+w/2,z/step+h/2);first=false;}g.closePath();}g.fill('evenodd');}
@@ -646,9 +651,14 @@ function miamiGraph(features,waterAt){
  let id=points.push([sx,sz+20])-1,lot=points.push(spawnP)-1;roads.push([spawn,id,'parking','Spawn access'],[id,lot,'parking','Spawn parking']);return {p:points,e:roads,anchors:{access:spawn,entrance:id,parkingEnd:lot},parking:spawnP};
 }
 async function loadRealMiami(){
- await boot('Loading Miami-Dade geographic data…');
- const [roads,water,buildings]=await Promise.all([gisTry([MIAMI_GIS.roads,MIAMI_GIS.roads2],'OBJECTID,CLASS,PRE_DIR,ST_NAME,ST_TYPE,SUF_DIR','1=1',12),gisTry([MIAMI_GIS.water,MIAMI_GIS.water2],'OBJECTID','1=1',6),gisTry([MIAMI_GIS.buildings],'OBJECTID','1=1',18)]);
- if(buildings.length<100)throw Error('Incomplete building layer');let waterAt=makeMiamiWater(water),graph=miamiGraph(roads,waterAt);return {graph,waterAt,buildings,roadFeatures:roads.length,waterFeatures:water.length};
+ await boot('Checking saved city map…');
+ let data=await readMiamiCache();
+ function compile(data){let {roads,water,buildings}=data;if(buildings.length<100)throw Error('Incomplete building layer');let waterAt=makeMiamiWater(water),graph=miamiGraph(roads,waterAt);return {graph,waterAt,buildings,roadFeatures:roads.length,waterFeatures:water.length};}
+ if(data){try{let result=compile(data);await boot('Loading saved Miami map…');return result;}catch(e){console.warn('Ignoring invalid map cache',e);}}
+ await boot('Downloading city map (first visit only)…');
+ const signal=AbortSignal.timeout(25000);
+ const [roads,water,buildings]=await Promise.all([gisTry([MIAMI_GIS.roads,MIAMI_GIS.roads2],'OBJECTID,CLASS,PRE_DIR,ST_NAME,ST_TYPE,SUF_DIR','1=1',12,signal),gisTry([MIAMI_GIS.water,MIAMI_GIS.water2],'OBJECTID','1=1',6,signal),gisTry([MIAMI_GIS.buildings],'OBJECTID','1=1',18,signal)]);
+ data={roads,water,buildings};let result=compile(data);void writeMiamiCache(data);return result;
 }
 function showGeoStatus(message,ok){let d=document.createElement('div');d.id='geo-source-status';d.style.cssText='position:fixed;left:8px;bottom:8px;z-index:95;background:#142337d9;color:white;font:11px Arial;padding:5px 8px;border-radius:5px;max-width:70vw;pointer-events:none';d.textContent=message;document.body.append(d);}
 try{realMiami=await loadRealMiami();coastalWorldLayout=realMiami.graph;parking.x=realMiami.graph.parking[0];parking.z=realMiami.graph.parking[1];parking.w=78;parking.d=64;showGeoStatus('Miami-Dade GIS • '+realMiami.graph.e.length+' road segments • building footprints loaded',true);}catch(error){realMiami=null;console.warn('Miami GIS unavailable; using previous map',error);showGeoStatus('Real Miami data unavailable — previous map loaded. Reload to retry.',false);}
@@ -787,7 +797,7 @@ for(const e of edges){e.transitLane=false;e.busOnly=false;}transitEdges.length=0
 // Dedicated taxi lay-bys, planned before terrain, sidewalks, buildings and roads.
 const taxiLaybys=new Map();
 function planTaxiLaybys(){
- let links=roadIncidence(),used=new Set();
+ let links=roadIncidence(),used=new Set(),nearRoads=new Map();for(let e of edges){let pad=e.w/2+5;spatialAdd(nearRoads,e,Math.min(e.p.x,e.q.x)-pad,Math.max(e.p.x,e.q.x)+pad,Math.min(e.p.z,e.q.z)-pad,Math.max(e.p.z,e.q.z)+pad);}
  for(let e of edges){
   let l=Math.hypot(e.q.x-e.p.x,e.q.z-e.p.z);
   if(e.high||e.ramp||e.bridge||e.riverBridge||e.six||e.busOnly||e.oneWay||e.flowDir||e.dirt||e.parking||e.busBay||e.widthProfiles||e.auxiliary||ring.includes(e.a)||ring.includes(e.b)||e.w>44||(e.lanes||1)>2||l<100||Math.abs(e.q.y-e.p.y)/l>(e.skiRoad?.077:.065))continue;
@@ -805,7 +815,7 @@ function planTaxiLaybys(){
     for(let u of [-33,-20,-10,0,10,20,33]){for(let offset of [e.w/2+.2,e.w/2+5,e.w/2+9.4]){
      let q=center.clone().addScaledVector(d,u).addScaledVector(n,offset);
      if(lavaDistance(q.x,q.z)<6||inGoldenRiver(q.x,q.z)||inParking(q.x,q.z,2)){safe=false;break;}
-     for(let k of edges){if(k===e)continue;let dx=k.q.x-k.p.x,dz=k.q.z-k.p.z,t=Math.max(0,Math.min(1,((q.x-k.p.x)*dx+(q.z-k.p.z)*dz)/(dx*dx+dz*dz||1)));if(Math.abs(q.y-(k.p.y+(k.q.y-k.p.y)*t))>6)continue;if(Math.hypot(q.x-k.p.x-dx*t,q.z-k.p.z-dz*t)<k.w/2+3){safe=false;break;}}
+     for(let k of spatialAt(nearRoads,q.x,q.z)){if(k===e)continue;let dx=k.q.x-k.p.x,dz=k.q.z-k.p.z,t=Math.max(0,Math.min(1,((q.x-k.p.x)*dx+(q.z-k.p.z)*dz)/(dx*dx+dz*dz||1)));if(Math.abs(q.y-(k.p.y+(k.q.y-k.p.y)*t))>6)continue;if(Math.hypot(q.x-k.p.x-dx*t,q.z-k.p.z-dz*t)<k.w/2+3){safe=false;break;}}
      if(!safe)break;
     }if(!safe)break;}
     if(!safe)continue;
@@ -816,7 +826,7 @@ function planTaxiLaybys(){
  }
 }
 planTaxiLaybys();
-function gradeRoadRecord(e){function endpoint(id){let p=nodes[id].clone();if(e.ramp&&freewayRampNodes.has(id)&&e.mergeHeading){let high=edges.find(k=>k.high&&(k.a===id||k.b===id)),d=e.mergeHeading;p.addScaledVector(new T.Vector3(-d.z,0,d.x),(high?.w||0)/2+e.w/2-.2);}return p;}let p=endpoint(e.a),q=endpoint(e.b),dx=q.x-p.x,dz=q.z-p.z,r=Math.max(e.w, ...edges.filter(k=>k.a===e.a||k.b===e.a||k.a===e.b||k.b===e.b).map(k=>k.w))/2+50;return {...e,p,q,dx,dz,l2:dx*dx+dz*dz||1,minX:Math.min(p.x,q.x)-r,maxX:Math.max(p.x,q.x)+r,minZ:Math.min(p.z,q.z)-r,maxZ:Math.max(p.z,q.z)+r};}
+const gradeIncidence=roadIncidence();function gradeRoadRecord(e){function endpoint(id){let p=nodes[id].clone();if(e.ramp&&freewayRampNodes.has(id)&&e.mergeHeading){let high=edges.find(k=>k.high&&(k.a===id||k.b===id)),d=e.mergeHeading;p.addScaledVector(new T.Vector3(-d.z,0,d.x),(high?.w||0)/2+e.w/2-.2);}return p;}let p=endpoint(e.a),q=endpoint(e.b),dx=q.x-p.x,dz=q.z-p.z,r=Math.max(e.w, ...gradeIncidence[e.a].map(k=>k.w),...gradeIncidence[e.b].map(k=>k.w))/2+50;return {...e,p,q,dx,dz,l2:dx*dx+dz*dz||1,minX:Math.min(p.x,q.x)-r,maxX:Math.max(p.x,q.x)+r,minZ:Math.min(p.z,q.z)-r,maxZ:Math.max(p.z,q.z)+r};}
 roadGrades=edges.filter(e=>!e.bridge&&!e.skiTunnel&&!e.cloudRoad).map(gradeRoadRecord);
 roadClearanceGrid=new Map();for(let edge of edges.filter(e=>e.high||e.ramp||e.snowClimb||e.motorwayConnector)){let e=gradeRoadRecord(edge);spatialAdd(roadClearanceGrid,e,e.minX,e.maxX,e.minZ,e.maxZ);}
 gradeGrid=new Map();for(let e of roadGrades)spatialAdd(gradeGrid,e,e.minX,e.maxX,e.minZ,e.maxZ);await boot('Creating terrain…');let geo=new T.PlaneGeometry(WORLD_WIDTH,WORLD_HEIGHT,WORLD_COLS-1,WORLD_ROWS-1);geo.rotateX(-Math.PI/2);geo.translate(WORLD_CENTER_X,0,0);let v=geo.attributes.position;for(let i=0;i<v.count;i++){v.setY(i,terrainMeshHeight(v.getX(i),v.getZ(i)));if(i>0&&i%16384===0)await boot('Creating terrain '+Math.round(100*i/v.count)+'%…');}geo.computeVertexNormals();let colors=new Float32Array(v.count*3);for(let i=0;i<v.count;i++){if(i>0&&i%32768===0)await boot('Coloring terrain '+Math.round(100*i/v.count)+'%…');let x=v.getX(i),z=v.getZ(i),c=biomeColor(x,z,v.getY(i));c.multiplyScalar(.86+.16*(Math.sin(x*.021+z*.018)*.5+.5)+.08*(Math.sin(x*.13+z*.073)*.5+.5));colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;}geo.setAttribute('color',new T.BufferAttribute(colors,3));const uv=geo.attributes.uv;for(let i=0;i<v.count;i++)uv.setXY(i,v.getX(i)/16,v.getZ(i)/16);uv.needsUpdate=true;const terrainMaterial=new T.MeshStandardMaterial({vertexColors:true,map:terrainGrain,bumpMap:terrainGrain,bumpScale:.24,roughness:.97,envMapIntensity:.12,flatShading:false});const terrainChunkMeshes=[];
@@ -1413,14 +1423,14 @@ function metroParcel(x,z,serial,frontage=true){
  let o={x,z,w:W,d:D,facing,frontRoad,buildingUse:tower?'office':hotel?'hotel':motel?'motel':warehouse?'warehouse':apartment?'apartments':shop?'retail':villa?'villa':stilt?'stilt house':'house',baseY:y,height:h,color:'#'+wall.toString(16).padStart(6,'0'),architecture:{roof,glass,trim,shape:'terrace'},facade,metroZone:zone};obs.push(o);metropolisParcels.push(o);spatialAdd(metroParcelGrid,o,x-W/2-35,x+W/2+35,z-D/2-35,z+D/2+35);return true;
 }
 async function buildRealMiamiBuildings(){
- const batches=new Map(),colors=[0xc7c2b5,0xd9d6c8,0xb0bfc4,0xe0d6c7,0xc6aa94];let count=0;
+ const batches=new Map(),colors=[0xc7c2b5,0xd9d6c8,0xb0bfc4,0xe0d6c7,0xc6aa94];let count=0,processed=0;
  for(let feature of realMiami.buildings){for(let raw of feature.geometry?.rings||[]){if(raw.length<4)continue;let pts=raw.map(miamiProject);if(Math.hypot(pts[0][0]-pts.at(-1)[0],pts[0][1]-pts.at(-1)[1])<.01)pts.pop();if(pts.length<3)continue;let minX=Math.min(...pts.map(q=>q[0])),maxX=Math.max(...pts.map(q=>q[0])),minZ=Math.min(...pts.map(q=>q[1])),maxZ=Math.max(...pts.map(q=>q[1])),x=(minX+maxX)/2,z=(minZ+maxZ)/2,w=maxX-minX,d=maxZ-minZ;if(w<2||d<2||w>350||d>350||Math.abs(x)>WORLD_WIDTH/2-5||Math.abs(z)>WORLD_HEIGHT/2-5||inParking(x,z,Math.max(w,d)/2)||waterGap(x,z)<0)continue;
  let area=0;for(let i=0;i<pts.length;i++){let a=pts[i],b=pts[(i+1)%pts.length];area+=a[0]*b[1]-b[0]*a[1];}if(Math.abs(area)<12)continue;
  let zone=metroZone(x,z),seed=metroHash(x,z),h=zone==='downtown'&&w*d>400?12+seed*65:zone==='coastal'&&w*d>220?9+seed*21:4+seed*7,y=ground(x,z),key=Math.floor(x/256)+','+Math.floor(z/256),b=batches.get(key);if(!b){b={v:[],c:[],ix:[]};batches.set(key,b);}let color=new T.Color(colors[Math.floor(seed*colors.length)%colors.length]),roof=color.clone().multiplyScalar(.77);
  let base=b.v.length/3;for(let q of pts){b.v.push(q[0],y+h,q[1]);b.c.push(roof.r,roof.g,roof.b);}for(let tri of T.ShapeUtils.triangulateShape(pts.map(q=>new T.Vector2(q[0],q[1])),[]))b.ix.push(...tri.map(i=>base+i));
  for(let i=0;i<pts.length;i++){let a=pts[i],k=pts[(i+1)%pts.length],j=b.v.length/3;b.v.push(a[0],y,a[1],k[0],y,k[1],k[0],y+h,k[1],a[0],y+h,a[1]);for(let l=0;l<4;l++)b.c.push(color.r,color.g,color.b);b.ix.push(j,j+1,j+2,j,j+2,j+3);}
  let o={x,z,w,d,baseY:y,height:h,color:'#'+color.getHexString(),architecture:{roof:roof.getHex(),shape:'terrace'},metroZone:zone,buildingUse:'mapped footprint',facing:0};obs.push(o);count++;
- }if(count%300===0)await boot('Building real Miami footprints… '+count);}
+ }if(++processed%500===0)await boot('Building real Miami footprints… '+count);}
  for(let b of batches.values()){let g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(b.v,3));g.setAttribute('color',new T.Float32BufferAttribute(b.c,3));g.setIndex(b.ix);g.computeVertexNormals();g.computeBoundingSphere();let m=new T.Mesh(g,new T.MeshStandardMaterial({vertexColors:true,roughness:.9,side:T.DoubleSide}));scene.add(m);buildingCullMeshes.push(m);}
  document.getElementById('geo-source-status').textContent='Miami-Dade GIS • '+realMiami.graph.e.length+' streets • '+count+' building outlines (estimated heights)';console.info('GIS building outlines',count);
 }
@@ -1544,7 +1554,10 @@ function buildCloudKingdom(){
 // No former cloud assets in the new realistic world.
 let rng=812;function random(){rng=(Math.imul(rng,1664525)+1013904223)>>>0;return rng/4294967296;}
 const trees=[], fields=[],stormTreeStates=new Map();
-function roadClearance(e){return Math.max(e.w,...adj[e.a].map(k=>k.w),...adj[e.b].map(k=>k.w))/2+(e.auxiliary?LANE_WIDTH+6:e.ramp?LANE_WIDTH+5:e.busBay?17:e.taxiBay?13:5);}function clearLand(x,z,r){return !lotOccupied(x,z,r*2,r*2,1)&&!urbanGroundPatches.some(o=>Math.abs(x-o.x)<o.w/2+r&&Math.abs(z-o.z)<o.d/2+r)&&(!coastalWorldActive||waterGap(x,z)>r+17)&&lavaDistance(x,z)>r+4&&!inParking(x,z,r)&&!edges.some(e=>dist(x,z,e).d<roadClearance(e)+r+5)&&!obs.some(o=>Math.abs(x-o.x)<o.w/2+r&&Math.abs(z-o.z)<o.d/2+r);}
+const sceneryRoadIndex=new Map(),sceneryObsIndex=new Map();let sceneryIndexedObs=0;function roadClearance(e){return e._sceneryClearance??Math.max(e.w,...adj[e.a].map(k=>k.w),...adj[e.b].map(k=>k.w))/2+(e.auxiliary?LANE_WIDTH+6:e.ramp?LANE_WIDTH+5:e.busBay?17:e.taxiBay?13:5);}
+for(let e of edges){e._sceneryClearance=roadClearance(e);let pad=e._sceneryClearance+55;spatialAdd(sceneryRoadIndex,e,Math.min(e.p.x,e.q.x)-pad,Math.max(e.p.x,e.q.x)+pad,Math.min(e.p.z,e.q.z)-pad,Math.max(e.p.z,e.q.z)+pad);}
+function updateSceneryObs(){if(sceneryIndexedObs>obs.length){sceneryObsIndex.clear();sceneryIndexedObs=0;}while(sceneryIndexedObs<obs.length){let o=obs[sceneryIndexedObs++];spatialAdd(sceneryObsIndex,o,o.x-o.w/2-50,o.x+o.w/2+50,o.z-o.d/2-50,o.z+o.d/2+50);}}
+function clearLand(x,z,r){if(lotOccupied(x,z,r*2,r*2,1)||coastalWorldActive&&waterGap(x,z)<=r+17||lavaDistance(x,z)<=r+4||inParking(x,z,r)||urbanGroundPatches.some(o=>Math.abs(x-o.x)<o.w/2+r&&Math.abs(z-o.z)<o.d/2+r))return false;updateSceneryObs();let roads=r<=50?spatialAt(sceneryRoadIndex,x,z):edges,buildings=r<=50?spatialAt(sceneryObsIndex,x,z):obs;return !roads.some(e=>dist(x,z,e).d<roadClearance(e)+r+5)&&!buildings.some(o=>Math.abs(x-o.x)<o.w/2+r&&Math.abs(z-o.z)<o.d/2+r);}
 const trunkGeo=new T.CylinderGeometry(.45,.65,1,12),leafGeo=new T.IcosahedronGeometry(1,1),pineGeo=new T.ConeGeometry(1,1,13,3);
 await boot('Creating scenery…');const treeData=[];for(let i=0;i<11500;i++){let x=i<7200?-2420+random()*4840:-2280+random()*1300,z=i<7200?-1920+random()*3840:430+random()*1250;if((desertBlend(x,z)>.55)||volcanicSceneryHash(x,z)<smooth((volcanoMask(x,z)-.12)/.67)||!clearLand(x,z,5)||ringSet.size&&Math.hypot(x-40,z-40)<65||skiPisteDistance(x,z)<6||!coastalWorldActive&&Math.hypot(x-skiResort.x,z-skiResort.z)<110)continue;let zone=metroZone(x,z);if((zone==='downtown'||zone==='industrial')&&random()<.91||zone==='coastal'&&random()<.70)continue;if(ground(x,z)>145)continue;let h=zone==='wetland'?3+random()*7:zone==='coastal'?8+random()*9:5+random()*15;let tree={x,z,h,pine:zone==='mountain'||zone==='wetland'&&random()<.36,palm:(zone==='coastal'||zone==='island')&&random()<.62,index:trees.length,base:ground(x,z),parts:[]};treeData.push(tree);trees.push(tree);}
 // Palm-lined coastal boulevards, in addition to the native broadleaf forest.
@@ -4326,7 +4339,7 @@ function addStreetDetails(){
  let data=new Map(),unit=new T.BoxGeometry(1,1,1),poleGeo=new T.CylinderGeometry(.5,.5,1,8),dummy=new T.Object3D();
  function part(pos,w,h,d,color,geo=unit,angle=0){let key=Math.floor(pos.x/256)+':'+Math.floor(pos.z/256)+':'+color+':'+geo.uuid;if(!data.has(key))data.set(key,{geo,color,items:[]});dummy.position.copy(pos);dummy.scale.set(w,h,d);dummy.rotation.set(0,angle,0);dummy.updateMatrix();data.get(key).items.push(dummy.matrix.clone());}
  for(let [i,e] of edges.entries()){if(!taxiStreet(e)||i%2)continue;let len=flat(e.p,e.q),lo=(mouth(e,e.a)+12)/len,hi=1-(mouth(e,e.b)+12)/len;if(hi<lo)continue;
-  for(let side of [-1,1]){let t=(lo+hi)/2,pp=walkEdge(e,t,side,2.18);if(inGoldenRiver(pp.x,pp.z)||roadFootprint(pp.x,pp.z,pp.y,0)||obs.some(o=>Math.abs(o.x-pp.x)<o.w/2+1&&Math.abs(o.z-pp.z)<o.d/2+1)||transitStops.some(b=>Math.hypot(b.p.x-pp.x,b.p.z-pp.z)<20))continue;
+  for(let side of [-1,1]){let t=(lo+hi)/2,pp=walkEdge(e,t,side,2.18);if(inGoldenRiver(pp.x,pp.z)||roadFootprint(pp.x,pp.z,pp.y,0)||(updateSceneryObs(),spatialAt(sceneryObsIndex,pp.x,pp.z).some(o=>Math.abs(o.x-pp.x)<o.w/2+1&&Math.abs(o.z-pp.z)<o.d/2+1))||transitStops.some(b=>Math.hypot(b.p.x-pp.x,b.p.z-pp.z)<20))continue;
    let d=e.q.clone().sub(e.p).setY(0).normalize(),angle=Math.atan2(d.x,d.z),at=(u,h)=>pp.clone().addScaledVector(d,u).add(new T.Vector3(0,h+.29,0));
    if(i%6===0){part(at(0,.45),.45,.9,.48,0x68797b);part(at(0,.94),.49,.12,.52,0x34454c);if(i%12===0){let p=at(2.5,0);p.y-=.15;part(p.clone().add(new T.Vector3(0,.35,0)),.37,.70,.37,0xbfa04f,poleGeo);part(p.clone().add(new T.Vector3(0,.73,0)),.46,.14,.46,0xd2b464,poleGeo);part(p.clone().add(new T.Vector3(0,.46,0)),.62,.17,.18,0xbfa04f,unit,angle);}}
    else if(i%6===2){part(at(0,.46),.52,.13,2.0,0x8b7561,unit,angle);let normal=new T.Vector3(-d.z,0,d.x).multiplyScalar(side);part(at(0,.85).addScaledVector(normal,.23),.10,.43,2.0,0x8b7561,unit,angle);for(let u of [-.7,.7]){part(at(u,.24),.12,.48,.15,0x535f61,unit,angle);part(at(u,.72).addScaledVector(normal,.23),.08,.63,.10,0x535f61,unit,angle);}}
@@ -4408,7 +4421,7 @@ setInterval(cloudSave,5000);setInterval(()=>{advertiseCityPresence();electCityHo
 (async()=>{try{const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm');sb=createClient('https://pzxupuryrjgbboldfrna.supabase.co','sb_publishable_DfP264XeZ6SIO2zlyLZOVg_HtMk0a_h',{auth:{storage:sessionStorageAdapter,persistSession:true}});sb.auth.onAuthStateChange((event,session)=>{if(session&&event==='TOKEN_REFRESHED')setTimeout(()=>sb.realtime.setAuth(session.access_token),0);});const {data}=await sb.auth.getSession();if(data.session)await joinOnline(data.session);else statusOnline('Log in to see other players');}catch(e){statusOnline('Offline — account unavailable');}})();
 
 
-const liveVersion='2026-11-28-live-247';
+const liveVersion='2026-11-28-live-248';
 function snapshotBus(){return busMode?{mode:true,line:busLine?{number:busLine.number,name:busLine.name,stops:busLine.stops.map(b=>({id:b.id,x:b.p.x,z:b.p.z,dir:b.dir})),legs:busLine.legs.slice(),approach:busLine.approach||0,payout:estimateBusReward(busLine)}:null,index:busStopIndex,seats:busOccupants.map(p=>p.seat),earned:busEarned}:null;}
 function restoreBus(p){if(!p?.mode)return false;toggleBusMode(true);if(!busMode)return false;busEarned=Number.isFinite(p.earned)?Math.max(0,p.earned):0;if(!p.line||[71,72].includes(p.line.number)||p.line.stops.some(q=>outsideMainWorld(q.x,q.z)))return true;let stops=p.line.stops.map(q=>transitStops.find(b=>b.id===q.id&&b.dir===q.dir&&Math.hypot(b.p.x-q.x,b.p.z-q.z)<12)||transitStops.filter(b=>b.dir===q.dir).sort((a,b)=>Math.hypot(a.p.x-q.x,a.p.z-q.z)-Math.hypot(b.p.x-q.x,b.p.z-q.z)).find(b=>Math.hypot(b.p.x-q.x,b.p.z-q.z)<28));if(stops.some(b=>!b)||!Number.isInteger(p.index)||p.index<0||p.index>=stops.length||p.line.legs.length!==stops.length){$('task').textContent=tr('Road changed — choose a new line');return true;}busLine={number:p.line.number,name:p.line.name,stops,legs:p.line.legs,approach:Number.isFinite(p.line.approach)?p.line.approach:0,payout:Number.isFinite(p.line.payout)?Math.max(5000,Math.min(52000,p.line.payout)):undefined};busStopIndex=p.index;for(let i of [...new Set(p.seats||[])]){let seat=busSeats[i];if(!seat)continue;let g=person(busRiderGroup,seat.x,seat.y,seat.z,true,i);g.scale.setScalar(.78);busOccupants.push({g,seat:i});}setBusTarget();updateBusSign();renderBusBoard();return true;}
 function restoreLiveUpdate(){try{let p=JSON.parse(sessionStorage.getItem('taxi-live-resume')||'null');if(!p||p.uid!==onlineUser?.id||Date.now()-p.at>600000)return;const findNode=v=>{if(!v)return -1;let best=-1,d=15;nodes.forEach((n,i)=>{let k=Math.hypot(n.x-v.x,n.z-v.z);if(k<d&&adj[i]?.length){best=i;d=k;}});return best;};if([p.x,p.y,p.z,p.h].every(Number.isFinite)){if(outsideMainWorld(p.x,p.z)||(!roadFootprint(p.x,p.z,p.y,2)&&!inParking(p.x,p.z,0))){p.x=parking.x-4.5;p.z=parking.z;p.y=nodes[parkingEnd].y;p.h=0;}x=p.x;z=p.z;y=surfaceHeight(x,z,p.y);h=p.h;s=0;keys.clear();yaw=Number.isFinite(p.yaw)?p.yaw:0;taxi.rotation.set(0,h,0);taxi.position.set(x,y+.15,z);pitch=p.pitch??.35;zoom=p.zoom??22;}restoreOnline(p.progress);if(restoreBus(p.bus)){sessionStorage.removeItem('taxi-live-resume');return;}let dest=findNode(p.target);if(p.job){let a=p.job.rideVersion===2?findNode(p.a):-1,b=p.job.rideVersion===2?findNode(p.b):-1;if(a>=0&&b>=0){job={...p.job,a,b};target=job.stage===1?b:a;comfort=p.comfort;rideStart=performance.now()-p.elapsed;rideBudget=p.budget;if(job.stage===1)boardRiders();$('task').textContent=job.stage===1?'Drive to destination':'Pick up passenger';}else{job=null;target=-1;$('task').textContent='Road changed — choose a new ride';}}else target=dest;route();renderBoard();sessionStorage.removeItem('taxi-live-resume');}catch(e){console.warn('Update restore failed',e);}}
