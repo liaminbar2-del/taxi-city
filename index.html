@@ -299,12 +299,14 @@ const compactedCount=compactLocalJunctions();
 // Freeway access is via separate directional ramps, never local crossroads.
 function buildMotorwayInterchanges(){
  let built=0;const initial=nodes.length;
+ // East City already has two independent access corridors; eliminate the redundant direct h2 shortcut.
+ const obsolete=edges.indexOf(eastBusLink);if(obsolete>=0)edges.splice(obsolete,1);
  function splitHighAt(e,id,distance){let other=e.a===id?e.b:e.a,from=e.a===id,p=nodes[id],q=nodes[other],l=Math.hypot(q.x-p.x,q.z-p.z),pt=p.clone().lerp(q,distance/l),n=N(pt.x,pt.z,pt.y),outer={...e,a:from?n:other,b:from?other:n,p:nodes[from?n:other],q:nodes[from?other:n]};outer.len=outer.p.distanceTo(outer.q);moveRoadEndpoint(e,other,n);delete e.widthProfiles;delete outer.widthProfiles;edges.push(outer);return {n,outer};}
  function addRamp(from,to,kind,heading){edge(from,to,LANE_WIDTH);let e=edges.at(-1);Object.assign(e,{ramp:kind,rampFlow:1,flowDir:1,lanes:1,oneWay:false,transitLane:false,busOnly:false,mergeHeading:{x:heading.x,z:heading.z}});}
  for(let id=0;id<initial;id++){let arms=roadIncidence()[id],high=arms.filter(e=>e.high);if(high.length!==1||arms.length<3)continue;let e=high[0],len=Math.hypot(e.q.x-e.p.x,e.q.z-e.p.z);if(len>110){let split=splitHighAt(e,id,Math.min(80,len*.43));e.high=false;e.six=false;e.motorwayTransition=true;motorwayJoins.add(split.n);}else{e.high=false;e.six=false;e.motorwayTransition=true;}}
  for(let id=0;id<initial;id++){let arms=roadIncidence()[id],high=arms.filter(e=>e.high),local=arms.filter(e=>!e.high&&!e.ramp&&!e.dirt&&!e.parking&&!e.oneWay);if(high.length<2||!local.length)continue;
  for(let e of local){let p=nodes[id],other=e.a===id?e.b:e.a,q=nodes[other],toward=q.clone().sub(p).setY(0).normalize(),localLength=Math.hypot(q.x-p.x,q.z-p.z);
- let candidates=roadIncidence()[id].filter(k=>k.high).map(k=>{let d=(k.a===id?k.q:k.p).clone().sub(p).setY(0).normalize(),l=Math.hypot(k.q.x-k.p.x,k.q.z-k.p.z),side=toward.x*-d.z+toward.z*d.x;return {k,d,l,side,score:l*(.75+.25*Math.abs(side))};}).sort((a,b)=>b.score-a.score);
+ let candidates=roadIncidence()[id].filter(k=>k.high).map(k=>{let d=(k.a===id?k.q:k.p).clone().sub(p).setY(0).normalize(),l=Math.hypot(k.q.x-k.p.x,k.q.z-k.p.z),side=toward.x*-d.z+toward.z*d.x;return {k,d,l,side,score:l*(.55+.45*Math.abs(side))*(1+.65*toward.dot(d))};}).sort((a,b)=>b.score-a.score);
  let best=candidates[0];if(!best||best.l<25)throw Error('Motorway access too short at '+id);
  let {k,d,l,side}=best,sign=side>=0?1:-1,heading=d.clone().multiplyScalar(sign),normal=new T.Vector3(-heading.z,0,heading.x);
  let near=Math.min(65,l*.24),far=Math.min(190,l*.77),mid=(near+far)/2,spread=Math.max(48,Math.min(85,localLength*.36));
